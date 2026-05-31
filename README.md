@@ -1,11 +1,11 @@
-<![CDATA[<div align="center">
+﻿<div align="center">
 
 ```
 ███████╗ █████╗ ███████╗███████╗██╗  ██╗███████╗██████╗      ██████╗ ███████╗
 ██╔════╝██╔══██╗██╔════╝██╔════╝██║  ██║██╔════╝██╔══██╗    ██╔═══██╗██╔════╝
-███████╗███████║█████╗  █████╗  ███████║█████╗  ██████╔╝    ██║   ██║███████╗
-╚════██║██╔══██║██╔══╝  ██╔══╝  ██╔══██║██╔══╝  ██╔══██╗    ██║   ██║╚════██║
-███████║██║  ██║██║     ███████╗██║  ██║███████╗██║  ██║    ╚██████╔╝███████║
+███████╗███████║█████╗  █████╗  ███████║███████║██║  ██║    ╚██████╔╝███████║
+╚════██║██╔══██║██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██╔══██╗    ██║   ██║╚════██║
+███████║██║  ██║██║     ███████╗██║  ██║███████║██║  ██║    ╚██████╔╝███████║
 ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚══════╝
 ```
 
@@ -18,7 +18,7 @@
 
 **Real-time voice surveillance • Automated SOS • AI risk analysis • Evidence chain custody**
 
-[🚀 Live Demo](#-deployment) · [📖 Documentation](#-modules-deep-dive) · [⚡ Quick Start](#-quick-start)
+[🌐 Live Demo](https://safe-her-nu.vercel.app/) · [📖 Documentation](#modules-deep-dive) · [⚡ Quick Start](#quick-start)
 
 ---
 
@@ -26,41 +26,34 @@
 
 ## 🧬 What is SafeHer OS?
 
-SafeHer OS is a **mission-critical women's safety command system** disguised as a futuristic operating system interface. Unlike conventional safety apps that require manual interaction, SafeHer OS operates with **zero-touch threat response** — it continuously listens, analyzes, and acts autonomously.
+SafeHer OS is a **mission-critical women's safety command system** built as a futuristic operating system interface. It combines continuous voice monitoring, smart route insights, emergency automation, incident reporting, and evidence preservation in a single static web app.
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║  SAFEHER OS v1.0 — THREAT RESPONSE PIPELINE                ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  [BOOT] ──→ [VOICE ARM] ──→ [CONTINUOUS LISTEN] ──┐        ║
-║                                                     │        ║
-║              ┌──────────────────────────────────────┘        ║
-║              ▼                                               ║
-║  [KEYWORD DETECTED] ──→ [AUTO-SOS TRIGGER]                  ║
-║              │                                               ║
-║              ├──→ GPS Lock + Location Transmit               ║
-║              ├──→ Emergency Contacts Alerted (SMS/Call)      ║
-║              ├──→ Camera + Mic Auto-Record (30s)             ║
-║              ├──→ Photo Snapshot Captured                    ║
-║              └──→ Evidence Hashed (SHA-256) → Vault          ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-```
+This repository is optimized for modern browsers and deploys instantly on Vercel.
 
-### 🏆 Why SafeHer OS Wins
+### Core capabilities
 
-| Feature | Traditional Safety Apps | SafeHer OS |
-|---------|:----------------------:|:----------:|
-| Manual SOS button | ✅ | ✅ |
-| Voice-activated SOS | ❌ | ✅ **Always-on** |
-| Auto evidence recording | ❌ | ✅ **Camera + Mic** |
-| AI risk assessment | ❌ | ✅ **Real-time** |
-| Works without internet | ❌ | ✅ **Offline capable** |
-| Hindi keyword detection | ❌ | ✅ **"bachao", "darr"** |
-| Evidence chain integrity | ❌ | ✅ **SHA-256 hashed** |
-| Fake call decoy | Some | ✅ **With audio** |
-| Zero-touch activation | ❌ | ✅ **Fully autonomous** |
+- **Always-on voice guardian** with keyword detection
+- **Automated SOS activation** with hold-to-trigger interaction
+- **Evidence capture** using camera + mic
+- **Interactive safe route map** for Lucknow
+- **Incident reporting** with cryptographic evidence hashing
+- **Local evidence vault** with tamper-resistant storage
+- **Cyberpunk UX** with animated dashboard visuals
+
+---
+
+## 🚀 Live Deployment
+
+**Live Demo:** https://safe-her-nu.vercel.app/
+
+### Deployment summary
+
+- Host: **Vercel**
+- Type: **Static HTML/CSS/JS**
+- Map provider: **Leaflet + CartoDB dark tiles**
+- Voice engine: **Web SpeechRecognition API**
+- Media capture: **MediaRecorder API**
+- Crypto: **Web Crypto SHA-256**
 
 ---
 
@@ -68,130 +61,95 @@ SafeHer OS is a **mission-critical women's safety command system** disguised as 
 
 ```
 safeher-os/
-├── index.html        # UI Shell — 8 screens, 430+ lines
-├── styles.css        # Design System — Cyberpunk theme, 290+ lines
-├── app.js            # Core Engine — 650+ lines, 12 modules
-├── vercel.json       # Deployment config with security headers
-└── README.md         # This file
+├── index.html        # UI shell and main markup
+├── styles.css        # Cyberpunk theme, layout, motion
+├── app.js            # Core application logic
+├── vercel.json       # Vercel deployment settings
+└── README.md         # Project documentation
 ```
 
-### Technology Matrix
+### Technology matrix
 
 | Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Rendering** | HTML5 Semantic | Accessible, structured UI shell |
-| **Design** | Vanilla CSS3 | Custom properties, Grid, animations, glassmorphism |
-| **Engine** | ES6+ JavaScript | Zero-dependency application logic |
-| **Mapping** | Leaflet.js 1.9.4 | Interactive maps with CartoDB dark tiles |
-| **Voice** | Web Speech Recognition API | Continuous speech-to-text analysis |
-| **Media** | MediaRecorder API | Audio + video evidence capture |
-| **Crypto** | Web Crypto API | SHA-256 evidence hashing |
-| **Typography** | Google Fonts | Orbitron (headings) + Share Tech Mono (data) |
-| **Persistence** | localStorage | Contacts, keywords, reports, settings |
-| **Deployment** | Vercel | Zero-config static hosting |
-
-### Design Tokens
-
-```css
---bg:     #0A0A0F    /* Deep void black         */
---red:    #FF003C    /* Crimson — danger/SOS     */
---cyan:   #00F5FF    /* Electric cyan — data     */
---amber:  #FFB300    /* Amber — warnings         */
---green:  #00FF88    /* Neon green — safe zones   */
---glass:  blur(20px) /* Glassmorphism backdrop    */
-```
+|------|-----------|---------|
+| UI | HTML5 | Semantic interface structure |
+| Styling | CSS3 | Glassmorphism, animations, responsive layout |
+| Runtime | Vanilla JavaScript | Zero-dependency feature engine |
+| Mapping | Leaflet 1.9.4 | Route safety visualization |
+| Voice | SpeechRecognition API | Keyword detection and voice trigger |
+| Media | MediaRecorder API | Audio/video evidence capture |
+| Crypto | Web Crypto API | SHA-256 hash generation |
+| Storage | localStorage | Contacts, reports, settings, vault |
+| Deployment | Vercel | Static hosting with secure headers |
 
 ---
 
-## 🧩 Modules Deep Dive
+## 🧩 Feature Overview
 
-### Module 01 — 🛡️ Command Dashboard
-The nerve center. Displays real-time system health at a glance.
+### 1. Command Dashboard
 
-- **4 stat cards** — Animated count-up with 3D perspective tilt on hover
-- **Threat Escalation Bar** — 4 levels: `NOMINAL` → `MONITORING` → `THREAT` → `CRITICAL`
-- **Live Leaflet Map** — Lucknow-centered with 7 color-coded safety markers
-- **Activity Feed** — 10 chronological events with relative timestamps
-- **Quick Actions** — SOS NOW, Fake Call, Share Location, Voice Arm
+- Animated KPI cards for incidents, routes, guardians, and evidence
+- Threat escalation bar with four levels
+- Embedded Leaflet map with Lucknow safety points
+- Activity feed showing recent events
+- Quick actions for SOS, fake call, location sharing, and voice arm
 
-### Module 02 — 🗺️ Safe Routes Navigation
-AI-analyzed route safety with real Lucknow geography.
+### 2. Safe Routes Navigation
 
-- **4 mapped routes** with safety scores (32–95/100)
-- **12 named locations** — Hazratganj, Gomti Nagar, Aminabad, Alambagh, etc.
-- **5 danger heatmap zones** — Toggleable red overlay circles
-- **3 police stations** — Marked with dial info
-- **Route info panel** — Distance, safety score, estimated time, warnings
+- Interactive route visualization
+- Heatmap toggle and safe-route filter
+- Location-specific safety score display
+- Distance, estimated time, and warning panel
 
-### Module 03 — 🚨 SOS Emergency Console
-Full emergency sequence with automated evidence collection.
+### 3. SOS Emergency Console
 
-- **Hold-to-activate** (3 sec) with animated SVG progress ring
-- **4-phase sequence:** GPS → Contacts → Evidence → Secured
-- **Auto camera + mic recording** — 30-second WebM capture
-- **Auto photo snapshot** — JPEG captured during Phase 3
-- **Alarm siren** — Web Audio API sawtooth oscillator sweep
-- **Emergency helplines** — Police (100), Women (1091), Ambulance (108), Child (1098), UP 1090
-- **Safety protocol** — 6-step emergency response checklist
+- 3-second hold-to-activate SOS button
+- Multi-phase emergency sequence
+- Automatic audio/video capture
+- Built-in emergency helpline directory
+- Fake call decoy for threat deterrence
 
-### Module 04 — 🎤 Voice Guardian (Always-On)
-**The killer feature.** Auto-arms on boot, listens continuously, triggers SOS autonomously.
+### 4. Voice Guardian
 
-```
-TRIGGER KEYWORDS:
-┌──────────┬──────────┬───────────┬──────────┐
-│  help    │  bachao  │ emergency │   darr   │
-├──────────┼──────────┼───────────┼──────────┤
-│  police  │  raksha  │  scared   │  (custom)│
-└──────────┴──────────┴───────────┴──────────┘
-```
+- Auto-arms on boot
+- Continuous listening across screens
+- Auto-reconnect fallback when speech recognition drops
+- Multi-language support: Hindi and English
+- Real-time waveform visualization
+- Detection log and trigger history
 
-- **Auto-arms on boot** — No manual toggle required
-- **Continuous listening** — Active on ALL screens simultaneously
-- **Auto-restarts** — If recognition drops, reconnects in 300ms
-- **Multi-language** — Hindi (`hi-IN`), English (`en-IN`), or Both
-- **30s cooldown** — Prevents accidental re-triggers
-- **Waveform canvas** — Real-time audio visualization
-- **Detection log** — Timestamped system events
-- **Nearby safe zones** — Distance to 5 closest safe locations
+### 5. Incident Report
 
-### Module 05 — 📝 Report Incident
-Structured incident reporting with evidence upload.
+- Structured incident form
+- Category selection with location auto-fill
+- File upload for supporting evidence
+- Anonymous reporting enabled by default
+- SHA-256 evidence fingerprint generation
+- Persistent browser storage
 
-- **5 categories** — Stalking, Harassment, Assault, Suspicious Activity, Other
-- **Auto-location** — Pre-filled with GPS coordinates
-- **File upload** — Drag-and-drop with image/video support
-- **Anonymous mode** — On by default
-- **SHA-256 hash** — Generated on submission for evidence integrity
-- **localStorage persistence** — Reports saved locally
+### 6. AI Guardian (Optional)
 
-### Module 06 — 🤖 AI Guardian (RAKSHA)
-Context-aware safety chatbot with risk assessment.
+- Safety chatbot interface
+- Risk assessment badges for responses
+- Quick action query chips
+- Optional Anthropic Claude integration via localStorage key
+- Offline fallback responses when API is unavailable
 
-- **4 quick-action chips** — Pre-built safety queries
-- **Risk badges** — `LOW` (green) / `MEDIUM` (amber) / `HIGH` (red) on every response
-- **Lucknow-specific** — References local landmarks, police stations, routes
-- **Anthropic API** — Optional Claude integration for live AI responses
-- **Intelligent fallback** — Rich pre-built responses when API unavailable
+### 7. Evidence Vault
 
-### Module 07 — 🔒 Evidence Vault
-Tamper-proof digital evidence locker.
+- Encrypted evidence listing
+- Filters for photos, videos, and reports
+- SHA-256 hash chain for proof integrity
+- Storage meter and download-ready entries
+- 3D card hover interaction
 
-- **8 pre-loaded items** + auto-populated from SOS captures
-- **4 filter categories** — All, Photos, Video, Reports
-- **SHA-256 hash chain** — Each item cryptographically fingerprinted
-- **Storage meter** — Visual capacity indicator (2.3/5 GB)
-- **Download capability** — Individual evidence export
-- **3D tilt cards** — Perspective transform on hover
+### 8. System Settings
 
-### Module 08 — ⚙️ System Settings
-Full system configuration panel.
-
-- **Emergency contacts** — CRUD operations with phone numbers
-- **Custom keywords** — Add/remove voice trigger words
-- **Alert channels** — SMS, Call, WhatsApp toggles
-- **Privacy controls** — Anonymous reporting, auto-evidence capture
-- **All changes persisted** to localStorage
+- Emergency contact management
+- Custom voice keywords
+- Alert channel toggles
+- Privacy and capture controls
+- Local storage persistence
 
 ---
 
@@ -200,18 +158,17 @@ Full system configuration panel.
 | Effect | Technique |
 |--------|-----------|
 | Boot sequence | CSS transitions + JS timed steps |
-| Particle network | Canvas 2D — 70 dots with distance-linked connections |
-| Scanline overlay | `repeating-linear-gradient` with `@keyframes` scroll |
-| 3D card tilt | `perspective(600px) rotateX/Y` on `mousemove` |
-| Glassmorphism | `backdrop-filter: blur(20px)` + rgba borders |
-| Neon glow | Multi-layer `box-shadow` with color bleed |
-| GPS scramble | Random digit replacement settling to final coords |
-| SOS pulse | Infinite `@keyframes` with box-shadow breathing |
-| Red flash | Full-body `@keyframes` background flash on SOS |
-| Counter animation | `requestAnimationFrame` driven count-up |
-| Live clock | `setInterval` with IST timezone formatting |
-| System uptime | Live `HH:MM:SS` counter from boot moment |
-| Waveform | Canvas sine wave with amplitude modulation |
+| Particle network | Canvas 2D with dynamic line links |
+| Scanline overlay | `repeating-linear-gradient` with animated background |
+| 3D card tilt | `perspective(600px)` and pointer tracking |
+| Glassmorphism | `backdrop-filter: blur(20px)` + translucent borders |
+| Neon glow | Multi-layer box-shadow effects |
+| GPS scramble | Animated digit randomization to final coordinates |
+| SOS pulse | `@keyframes` breathing shadow effect |
+| Counter animation | `requestAnimationFrame` count-up sequence |
+| Live clock | IST timezone formatting with `setInterval` |
+| Uptime tracker | Runtime counter from app boot time |
+| Waveform | Canvas-based amplitude visualization |
 
 ---
 
@@ -219,18 +176,18 @@ Full system configuration panel.
 
 | Zone | Score | Status | Notes |
 |------|:-----:|--------|-------|
-| Lulu Mall Area | 95 | 🟢 Safe | Commercial, well-monitored |
-| Hazratganj | 92 | 🟢 Safe | Main CP area, CCTV coverage |
-| Gomti Nagar | 90 | 🟢 Safe | Residential + commercial hub |
-| Indira Nagar | 87 | 🟢 Safe | Well-lit residential |
-| Gomti Riverfront | 85 | 🟢 Safe | Public park area |
+| Lulu Mall Area | 95 | 🟢 Safe | Commercial, high visibility |
+| Hazratganj | 92 | 🟢 Safe | Core police and CCTV coverage |
+| Gomti Nagar | 90 | 🟢 Safe | Residential and business hub |
+| Indira Nagar | 87 | 🟢 Safe | Well-lit neighborhood |
+| Gomti Riverfront | 85 | 🟢 Safe | Public recreation area |
 | Mahanagar | 82 | 🟢 Safe | Residential colony |
-| Amausi Airport | 70 | 🟡 Moderate | Transit zone |
-| Aminabad | 64 | 🟡 Moderate | Narrow lanes, busy market |
-| Kaiserbagh | 61 | 🟡 Moderate | Historical area |
-| Charbagh Station | 58 | 🟡 Moderate | Railway station area |
+| Amausi Airport | 70 | 🟡 Moderate | Transit area |
+| Aminabad | 64 | 🟡 Moderate | Busy market lanes |
+| Kaiserbagh | 61 | 🟡 Moderate | Historical district |
+| Charbagh Station | 58 | 🟡 Moderate | Railway transit zone |
 | 1090 Chauraha | 55 | 🟡 Moderate | Intersection hub |
-| Alambagh | 32 | 🔴 Avoid | Multiple incidents reported |
+| Alambagh | 32 | 🔴 Avoid | High incident density |
 
 ---
 
@@ -241,105 +198,90 @@ Full system configuration panel.
 git clone https://github.com/your-username/safeher-os.git
 cd safeher-os
 
-# Option 1: Open directly
+# Option 1: Open locally
 start index.html          # Windows
 open index.html           # macOS
 
-# Option 2: Static server
+# Option 2: Use a local server
 npx serve . -l 3000
 
 # Option 3: VS Code Live Server
 # Right-click index.html → Open with Live Server
 ```
 
-### Browser Requirements
+### Browser requirements
 
-| Requirement | Minimum |
-|------------|---------|
-| Chrome / Edge | v80+ (recommended) |
-| Microphone | Required for Voice Guardian |
-| Camera | Required for SOS evidence |
-| Location | Required for GPS features |
-| HTTPS | Required for media APIs on deployment |
+- Chrome / Edge v80+ recommended
+- Microphone required for voice guardian
+- Camera required for evidence capture
+- Location required for GPS-enabled features
+- HTTPS required for camera/microphone access in deployed mode
 
-### Optional: Enable Live AI
+### Optional AI integration
+
 ```javascript
-// In browser console:
 localStorage.setItem('safeher_api_key', 'your-anthropic-api-key');
-// AI Guardian will now use Claude for real-time responses
 ```
 
 ---
 
-## 🚀 Deployment
+## 🔧 Deployment Notes
 
-### Deploy to Vercel (One-Click)
+This project is configured for Vercel with no build step required.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/safeher-os)
+### Manual Vercel deployment
 
-### Manual Vercel Deploy
 ```bash
-# Install Vercel CLI
 npm i -g vercel
-
-# Deploy (from project root)
 vercel
-
-# Deploy to production
 vercel --prod
 ```
 
-The included `vercel.json` configures:
-- ✅ Static file serving (no build step)
-- ✅ Security headers (X-Content-Type-Options, X-Frame-Options)
-- ✅ Permissions-Policy for camera, mic, geolocation
-- ✅ Asset caching (CSS/JS — 1 year immutable)
-- ✅ SPA rewrites to index.html
+### Configured by `vercel.json`
+
+- static file hosting
+- security headers
+- asset cache TTL
+- SPA fallback to `index.html`
 
 ---
 
 ## 🔐 Security & Privacy
 
-```
-┌─────────────────────────────────────────────┐
-│  DATA FLOW: 100% CLIENT-SIDE                │
-│                                             │
-│  Browser ──→ localStorage (encrypted)       │
-│         ──→ No external servers             │
-│         ──→ No analytics / tracking         │
-│         ──→ No data leaves the device       │
-│         ──→ SHA-256 evidence hashing        │
-│         ──→ Permission-gated media access   │
-└─────────────────────────────────────────────┘
-```
+SafeHer OS is designed to keep data local and limit external exposure.
 
-| Measure | Implementation |
-|---------|---------------|
-| Data storage | localStorage only — never leaves device |
-| Evidence integrity | SHA-256 cryptographic hashing |
-| Media access | Permission-gated (camera, mic, GPS) |
-| Anonymous reporting | Enabled by default |
-| Network requests | Zero (except map tiles + optional AI) |
-| Security headers | CSP, X-Frame-Options, Referrer-Policy |
+- **Client-side first**: the app runs entirely in browser
+- **No analytics / tracking** by default
+- **localStorage** used for contacts, reports, settings, and evidence metadata
+- **SHA-256 hashing** secures evidence fingerprints
+- **Permission workflow** for camera, mic, and location
+- **No backend required** for core safety features
 
 ---
 
 ## 📋 API Reference
 
 ```javascript
-// Core namespace
-App.nav.switchScreen('sos')      // Navigate to any screen
+App.nav.switchScreen('sos')      // Navigate to SOS screen
 App.sos.activate()               // Trigger SOS sequence
-App.sos.startFakeCall()          // Trigger fake incoming call
+App.sos.startFakeCall()          // Launch fake call overlay
 App.sos.toggleAlarm()            // Toggle siren alarm
 App.voice.autoArm()              // Arm voice recognition
 App.voice.test()                 // Simulate keyword detection
-App.chat.send()                  // Send AI chat message
-App.vault.render()               // Refresh evidence vault
+App.chat.send()                  // Send AI message
+App.vault.render()               // Refresh evidence vault UI
 App.shareLocation()              // Share GPS coordinates
 App.settings.addContact()        // Add emergency contact
-App.settings.addKeyword()        // Add voice trigger keyword
+App.settings.addKeyword()        // Add voice keyword
 ```
+
+---
+
+## ⚡ Credit
+
+Built for women's safety, with a focus on intelligent response, immersive UI, and data integrity.
+
+Made in 🇮🇳 India | Lucknow Edition
 
 ---
 
@@ -356,7 +298,4 @@ App.settings.addKeyword()        // Add voice trigger keyword
 
 **Built with 🛡️ for women's safety**
 
-Made in 🇮🇳 India | Lucknow Edition
-
 </div>
-]]>
