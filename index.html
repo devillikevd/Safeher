@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="SafeHer OS - Advanced Women Safety Command System">
+<title>SafeHer OS v1.0 — Women Safety Command System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- BOOT SCREEN -->
+<div id="boot-screen">
+  <div class="boot-content">
+    <div class="boot-logo">
+      <svg class="shield-icon" viewBox="0 0 100 120" width="80" height="96">
+        <path d="M50 5 L90 25 L90 60 Q90 95 50 115 Q10 95 10 60 L10 25 Z" fill="none" stroke="#FF003C" stroke-width="3"/>
+        <path d="M50 20 L75 35 L75 58 Q75 82 50 98 Q25 82 25 58 L25 35 Z" fill="rgba(255,0,60,0.1)" stroke="#FF003C" stroke-width="1.5"/>
+        <text x="50" y="68" text-anchor="middle" fill="#FF003C" font-family="Orbitron" font-size="22" font-weight="700">S</text>
+      </svg>
+    </div>
+    <div class="boot-text" id="boot-text">INITIALIZING SAFEHER OS...</div>
+    <div class="boot-progress"><div class="boot-progress-bar" id="boot-bar"></div></div>
+    <div class="boot-status" id="boot-status"></div>
+  </div>
+</div>
+
+<!-- SCANLINE OVERLAY -->
+<div class="scanline-overlay"></div>
+
+<!-- PARTICLE CANVAS -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- FAKE CALL OVERLAY -->
+<div id="fake-call-overlay" class="hidden">
+  <div class="fake-call-card">
+    <div class="fake-call-avatar">📱</div>
+    <div class="fake-call-name">Mom</div>
+    <div class="fake-call-status">Incoming Call...</div>
+    <div class="fake-call-actions">
+      <button class="fake-call-btn accept" onclick="App.sos.acceptFakeCall()">✓ Accept</button>
+      <button class="fake-call-btn decline" onclick="App.sos.declineFakeCall()">✕ Decline</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP WRAPPER -->
+<div id="app-wrapper" class="hidden">
+  <!-- LEFT SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <svg class="shield-icon-sm" viewBox="0 0 100 120" width="32" height="38">
+        <path d="M50 5 L90 25 L90 60 Q90 95 50 115 Q10 95 10 60 L10 25 Z" fill="none" stroke="#FF003C" stroke-width="4"/>
+        <text x="50" y="68" text-anchor="middle" fill="#FF003C" font-family="Orbitron" font-size="26" font-weight="700">S</text>
+      </svg>
+      <span class="logo-text">SafeHer</span>
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item active" data-screen="dashboard"><span class="nav-icon">🛡️</span><span class="nav-label">Dashboard</span></li>
+      <li class="nav-item" data-screen="saferoutes"><span class="nav-icon">🗺️</span><span class="nav-label">Safe Routes</span></li>
+      <li class="nav-item" data-screen="sos"><span class="nav-icon">🚨</span><span class="nav-label">SOS Console</span></li>
+      <li class="nav-item" data-screen="voice"><span class="nav-icon">🎤</span><span class="nav-label">Voice Guardian</span></li>
+      <li class="nav-item" data-screen="report"><span class="nav-icon">📝</span><span class="nav-label">Report Incident</span></li>
+      <li class="nav-item" data-screen="aichat"><span class="nav-icon">🤖</span><span class="nav-label">AI Guardian</span></li>
+      <li class="nav-item" data-screen="evidence"><span class="nav-icon">🔒</span><span class="nav-label">Evidence Vault</span></li>
+      <li class="nav-item" data-screen="settings"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></li>
+    </ul>
+  </nav>
+
+  <!-- MAIN CONTENT AREA -->
+  <div id="main-area">
+    <!-- TOP HEADER -->
+    <header id="top-header">
+      <div class="header-left">
+        <span class="sys-label">SYSTEM NODE:</span>
+        <span class="sys-name">SAFEHER OS v1.0<span class="blink-cursor">_</span></span>
+      </div>
+      <div class="header-center">
+        <span class="header-badge"><span class="gps-dot"></span> GPS ACTIVE</span>
+        <span class="header-badge" id="voice-status-badge">🎤 STANDBY</span>
+        <span class="header-badge threat-badge" id="threat-badge">● NOMINAL</span>
+      </div>
+      <div class="header-right">
+        <span class="live-clock" id="live-clock">00:00:00 IST</span>
+        <div class="user-avatar">👤 <span>Operator</span></div>
+      </div>
+    </header>
+
+    <!-- SCREENS -->
+    <div id="screen-container">
+      <!-- DASHBOARD -->
+      <section id="screen-dashboard" class="screen active">
+        <div class="screen-title">COMMAND DASHBOARD</div>
+        <div class="stat-grid">
+          <div class="stat-card tilt-card"><div class="stat-value" data-count="47">0</div><div class="stat-label">Incidents Reported</div></div>
+          <div class="stat-card tilt-card"><div class="stat-value" data-count="128">0</div><div class="stat-label">Safe Routes Mapped</div></div>
+          <div class="stat-card tilt-card"><div class="stat-value" data-count="12">0</div><div class="stat-label">Active Guardians</div></div>
+          <div class="stat-card tilt-card"><div class="stat-value" data-count="83">0</div><div class="stat-label">Evidence Secured</div></div>
+        </div>
+        <div class="threat-escalation">
+          <div class="threat-title">THREAT ESCALATION LEVEL</div>
+          <div class="threat-bar">
+            <div class="threat-level active" data-level="1"><span>1</span>NOMINAL</div>
+            <div class="threat-level" data-level="2"><span>2</span>MONITORING</div>
+            <div class="threat-level" data-level="3"><span>3</span>THREAT</div>
+            <div class="threat-level" data-level="4"><span>4</span>CRITICAL</div>
+          </div>
+        </div>
+        <div class="dash-row">
+          <div class="dash-map-preview"><div id="dash-map" style="width:100%;height:100%;border-radius:8px;"></div></div>
+          <div class="dash-activity">
+            <div class="panel-title">RECENT ACTIVITY</div>
+            <div class="activity-feed" id="activity-feed"></div>
+          </div>
+        </div>
+        <div class="quick-actions">
+          <button class="action-btn sos-action" onclick="App.nav.switchScreen('sos')">⚡ SOS NOW</button>
+          <button class="action-btn" onclick="App.sos.startFakeCall()">📞 FAKE CALL</button>
+          <button class="action-btn" onclick="App.shareLocation()">📍 SHARE LOCATION</button>
+          <button class="action-btn" onclick="App.nav.switchScreen('voice')">🎤 VOICE ARM</button>
+        </div>
+      </section>
+
+      <!-- SAFE ROUTES -->
+      <section id="screen-saferoutes" class="screen">
+        <div class="screen-title">SAFE ROUTES NAVIGATION</div>
+        <div class="map-container">
+          <div id="main-map" style="width:100%;height:100%;"></div>
+          <div class="map-controls">
+            <input type="text" id="route-search" placeholder="Enter destination..." class="cyber-input">
+            <div class="map-toggles">
+              <button class="toggle-btn active" onclick="App.routes.toggleHeatmap(this)">HEATMAP</button>
+              <button class="toggle-btn" onclick="App.routes.toggleSafeOnly(this)">SAFE ONLY</button>
+            </div>
+          </div>
+          <div class="route-info-panel" id="route-info">
+            <div class="route-stat"><span class="rl">Distance</span><span class="rv">3.2 km</span></div>
+            <div class="route-stat"><span class="rl">Safety Score</span><span class="rv safety-high">87/100</span></div>
+            <div class="route-stat"><span class="rl">Est. Time</span><span class="rv">12 min</span></div>
+            <div class="route-stat"><span class="rl">Warnings</span><span class="rv safety-low">2</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SOS CONSOLE -->
+      <section id="screen-sos" class="screen">
+        <div class="screen-title">SOS EMERGENCY CONSOLE</div>
+        <div class="sos-center">
+          <div class="sos-btn-wrapper">
+            <div class="sos-ring"></div>
+            <button class="sos-button" id="sos-button" onmousedown="App.sos.startHold()" onmouseup="App.sos.endHold()" ontouchstart="App.sos.startHold()" ontouchend="App.sos.endHold()">
+              <span class="sos-text">SOS</span>
+              <span class="sos-sub">HOLD 3 SEC</span>
+            </button>
+            <svg class="sos-progress-ring" width="220" height="220"><circle cx="110" cy="110" r="100" id="sos-ring-progress"/></svg>
+          </div>
+          <button class="abort-btn hidden" id="sos-abort" onclick="App.sos.abort()">✕ ABORT</button>
+        </div>
+        <div class="sos-phases" id="sos-phases">
+          <div class="phase" data-phase="1"><span class="phase-dot"></span>GPS ACQUIRING...</div>
+          <div class="phase" data-phase="2"><span class="phase-dot"></span>TRANSMITTING TO CONTACTS...</div>
+          <div class="phase" data-phase="3"><span class="phase-dot"></span>CAPTURING EVIDENCE...</div>
+          <div class="phase" data-phase="4"><span class="phase-dot"></span>EVIDENCE SECURED ✓</div>
+        </div>
+        <div class="sos-contacts" id="sos-contacts">
+          <div class="sos-contact"><span>👩 Priya (Sister)</span><span class="contact-status">Ready</span></div>
+          <div class="sos-contact"><span>👩 Mom</span><span class="contact-status">Ready</span></div>
+          <div class="sos-contact"><span>🚔 Police (100)</span><span class="contact-status">Ready</span></div>
+        </div>
+        <div class="sos-extras">
+          <button class="action-btn" onclick="App.sos.startFakeCall()">📞 FAKE CALL</button>
+          <button class="action-btn" onclick="App.sos.toggleAlarm()">🔊 ALARM</button>
+        </div>
+        <div class="sos-recording-status hidden" id="sos-recording-status">
+          <span class="rec-dot"></span> <span>REC</span> — Audio + Video capturing evidence...
+          <div class="rec-timer" id="rec-timer">00:00</div>
+        </div>
+        <div class="sos-info-grid">
+          <div class="info-card">
+            <div class="info-card-title">🚔 EMERGENCY HELPLINES</div>
+            <div class="helpline-row"><span>Police</span><span class="hl-num">100</span></div>
+            <div class="helpline-row"><span>Women Helpline</span><span class="hl-num">1091</span></div>
+            <div class="helpline-row"><span>National Commission</span><span class="hl-num">7827-170-170</span></div>
+            <div class="helpline-row"><span>Ambulance</span><span class="hl-num">108</span></div>
+            <div class="helpline-row"><span>Child Helpline</span><span class="hl-num">1098</span></div>
+            <div class="helpline-row"><span>UP Women Power Line</span><span class="hl-num">1090</span></div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-title">⚡ SAFETY PROTOCOL</div>
+            <div class="protocol-step"><span class="step-num">01</span> Stay calm, assess surroundings</div>
+            <div class="protocol-step"><span class="step-num">02</span> Move to nearest lit/crowded area</div>
+            <div class="protocol-step"><span class="step-num">03</span> Hold SOS 3 sec — auto alerts + evidence</div>
+            <div class="protocol-step"><span class="step-num">04</span> Use Fake Call to deter threats</div>
+            <div class="protocol-step"><span class="step-num">05</span> Voice Guardian auto-triggers on keywords</div>
+            <div class="protocol-step"><span class="step-num">06</span> All evidence chain-locked in vault</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VOICE GUARDIAN -->
+      <section id="screen-voice" class="screen">
+        <div class="screen-title">VOICE GUARDIAN SYSTEM</div>
+        <div class="voice-container">
+          <canvas id="waveform-canvas" width="800" height="200"></canvas>
+          <div class="voice-status" id="voice-status">
+            <span class="voice-dot"></span> STANDBY
+          </div>
+          <div class="voice-keywords">
+            <div class="panel-title">TRIGGER KEYWORDS</div>
+            <div class="keyword-list">
+              <span class="keyword">help</span><span class="keyword">bachao</span><span class="keyword">emergency</span>
+              <span class="keyword">darr</span><span class="keyword">police</span><span class="keyword">raksha</span><span class="keyword">scared</span>
+            </div>
+          </div>
+          <div class="voice-controls">
+            <div class="voice-row">
+              <span>Language:</span>
+              <button class="toggle-btn active" onclick="App.voice.setLang('hi',this)">HINDI</button>
+              <button class="toggle-btn" onclick="App.voice.setLang('en',this)">ENGLISH</button>
+              <button class="toggle-btn" onclick="App.voice.setLang('both',this)">BOTH</button>
+            </div>
+            <div class="voice-row">
+              <span>Sensitivity:</span>
+              <input type="range" min="1" max="10" value="7" class="cyber-range" id="voice-sensitivity">
+            </div>
+            <div class="voice-row">
+              <label class="toggle-switch"><input type="checkbox" id="voice-toggle" onchange="App.voice.toggle(this.checked)"><span class="toggle-slider"></span></label>
+              <span id="voice-engine-label">Voice Engine OFF</span>
+            </div>
+          </div>
+          <div class="voice-detected hidden" id="voice-detected">
+            <span>🔴 KEYWORD DETECTED:</span> <strong id="detected-word">—</strong> <span id="detected-time"></span>
+          </div>
+          <button class="action-btn" onclick="App.voice.test()">🧪 TEST DETECTION</button>
+          <div class="voice-info-grid">
+            <div class="info-card">
+              <div class="info-card-title">📋 DETECTION LOG</div>
+              <div class="log-entry"><span class="log-time">09:45:12</span> System armed — listening mode activated</div>
+              <div class="log-entry"><span class="log-time">09:42:08</span> Sensitivity calibrated to level 7</div>
+              <div class="log-entry"><span class="log-time">09:30:55</span> Hindi language pack loaded</div>
+              <div class="log-entry"><span class="log-time">09:15:22</span> 7 trigger keywords registered</div>
+              <div class="log-entry"><span class="log-time">08:00:00</span> Voice engine initialized</div>
+            </div>
+            <div class="info-card">
+              <div class="info-card-title">📍 NEARBY SAFE ZONES</div>
+              <div class="safezone-row"><span>🟢 Hazratganj CP</span><span class="sz-dist">0.2 km</span></div>
+              <div class="safezone-row"><span>🟢 Sahara Ganj Mall</span><span class="sz-dist">0.8 km</span></div>
+              <div class="safezone-row"><span>🚔 Hazratganj PS</span><span class="sz-dist">0.4 km</span></div>
+              <div class="safezone-row"><span>🏥 KGMU Hospital</span><span class="sz-dist">1.2 km</span></div>
+              <div class="safezone-row"><span>🟢 Lulu Mall</span><span class="sz-dist">3.1 km</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORT INCIDENT -->
+      <section id="screen-report" class="screen">
+        <div class="screen-title">REPORT INCIDENT</div>
+        <div class="report-container">
+          <form id="report-form" class="cyber-form" onsubmit="App.report.submit(event)">
+            <div class="form-group">
+              <label>Incident Type</label>
+              <select class="cyber-input" id="report-type">
+                <option>🔍 Stalking</option><option>⚠️ Harassment</option><option>🚫 Assault</option><option>👁️ Suspicious Activity</option><option>📋 Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" class="cyber-input" id="report-location" value="Hazratganj, Lucknow" placeholder="Auto-detected or enter manually">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="cyber-input" id="report-desc" rows="4" placeholder="Describe the incident..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Upload Evidence</label>
+              <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                <span>📁 Drag & drop or click to upload</span>
+                <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="App.report.handleFile(this)">
+              </div>
+            </div>
+            <div class="form-group form-row">
+              <label>Date/Time</label>
+              <input type="text" class="cyber-input" id="report-time" readonly>
+            </div>
+            <div class="form-group form-row">
+              <label>Anonymous</label>
+              <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+            </div>
+            <button type="submit" class="action-btn sos-action" style="width:100%">SUBMIT REPORT</button>
+          </form>
+          <div class="report-success hidden" id="report-success">
+            <div class="success-icon">✓</div>
+            <div>Report Submitted Successfully</div>
+            <div class="evidence-hash" id="evidence-hash">SHA-256: ...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI GUARDIAN CHAT -->
+      <section id="screen-aichat" class="screen">
+        <div class="screen-title">AI GUARDIAN — RAKSHA</div>
+        <div class="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg system">RAKSHA AI GUARDIAN — Risk Assessment Mode. How can I help you stay safe?</div>
+          </div>
+          <div class="chat-chips">
+            <button class="chip" onclick="App.chat.sendChip(this)">Am I in danger?</button>
+            <button class="chip" onclick="App.chat.sendChip(this)">Find safe route</button>
+            <button class="chip" onclick="App.chat.sendChip(this)">What should I do?</button>
+            <button class="chip" onclick="App.chat.sendChip(this)">Call for help</button>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" class="cyber-input" id="chat-input" placeholder="Type your message..." onkeydown="if(event.key==='Enter')App.chat.send()">
+            <button class="action-btn" onclick="App.chat.send()">SEND</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- EVIDENCE VAULT -->
+      <section id="screen-evidence" class="screen">
+        <div class="screen-title">EVIDENCE VAULT</div>
+        <div class="vault-container">
+          <div class="vault-header">
+            <div class="vault-filters">
+              <button class="toggle-btn active" onclick="App.vault.filter('all',this)">ALL</button>
+              <button class="toggle-btn" onclick="App.vault.filter('photo',this)">PHOTOS</button>
+              <button class="toggle-btn" onclick="App.vault.filter('video',this)">VIDEO</button>
+              <button class="toggle-btn" onclick="App.vault.filter('report',this)">REPORTS</button>
+            </div>
+            <div class="vault-storage">
+              <span>Storage: 2.3 GB / 5 GB</span>
+              <div class="storage-bar"><div class="storage-fill" style="width:46%"></div></div>
+            </div>
+          </div>
+          <div class="vault-badge">🔗 Evidence chain is intact ✓</div>
+          <div class="vault-grid" id="vault-grid"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="screen-settings" class="screen">
+        <div class="screen-title">SYSTEM SETTINGS</div>
+        <div class="settings-container">
+          <div class="settings-section">
+            <h3>Emergency Contacts</h3>
+            <div id="settings-contacts"></div>
+            <button class="action-btn" onclick="App.settings.addContact()">+ ADD CONTACT</button>
+          </div>
+          <div class="settings-section">
+            <h3>Voice Trigger Keywords</h3>
+            <div id="settings-keywords" class="keyword-list"></div>
+            <div class="form-row" style="margin-top:10px">
+              <input type="text" class="cyber-input" id="new-keyword" placeholder="Add keyword">
+              <button class="action-btn" onclick="App.settings.addKeyword()">ADD</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3>Alert Preferences</h3>
+            <div class="setting-row"><span>SMS Alerts</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+            <div class="setting-row"><span>Call Alerts</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+            <div class="setting-row"><span>WhatsApp Alerts</span><label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label></div>
+          </div>
+          <div class="settings-section">
+            <h3>Privacy & Capture</h3>
+            <div class="setting-row"><span>Anonymous Reporting</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+            <div class="setting-row"><span>Auto-Evidence Capture</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+          </div>
+          <div class="settings-section">
+            <h3>System</h3>
+            <div class="setting-row"><span>Theme</span><span class="sys-val">Dark (Locked)</span></div>
+            <div class="setting-row"><span>Version</span><span class="sys-val">SafeHer OS v1.0.0</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <aside id="right-panel">
+    <div class="rp-section">
+      <div class="panel-title">GPS COORDINATES</div>
+      <div class="gps-display">
+        <div class="gps-val" id="gps-lat">26.8467° N</div>
+        <div class="gps-val" id="gps-lng">80.9462° E</div>
+      </div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">QUICK CONTACTS</div>
+      <div class="quick-contact"><span>👩 Priya</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
+      <div class="quick-contact"><span>👩 Mom</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
+      <div class="quick-contact"><span>🚔 Police</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">THREAT GAUGE</div>
+      <div class="threat-gauge">
+        <svg viewBox="0 0 120 120" width="120" height="120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#00F5FF" stroke-width="8" stroke-dasharray="78.5 314" stroke-linecap="round" transform="rotate(-90 60 60)" id="threat-gauge-circle"/>
+          <text x="60" y="58" text-anchor="middle" fill="#00F5FF" font-family="Orbitron" font-size="16" font-weight="700" id="threat-gauge-text">25%</text>
+          <text x="60" y="75" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="Share Tech Mono" font-size="9">THREAT</text>
+        </svg>
+      </div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">RECENT ALERTS</div>
+      <div class="alerts-feed" id="alerts-feed">
+        <div class="alert-item">⚠️ Unsafe zone detected — Alambagh <span class="alert-time">2m ago</span></div>
+        <div class="alert-item">✓ Route verified safe — Gomti Nagar <span class="alert-time">15m ago</span></div>
+        <div class="alert-item">📡 Guardian sync complete <span class="alert-time">1h ago</span></div>
+      </div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">SYSTEM STATUS</div>
+      <div class="sys-status-grid">
+        <div class="sys-stat"><span class="sys-dot green"></span>GPS Module<span class="sys-val">ONLINE</span></div>
+        <div class="sys-stat"><span class="sys-dot green"></span>Voice Engine<span class="sys-val">READY</span></div>
+        <div class="sys-stat"><span class="sys-dot green"></span>Evidence Vault<span class="sys-val">SYNCED</span></div>
+        <div class="sys-stat"><span class="sys-dot amber"></span>Network<span class="sys-val">4G</span></div>
+        <div class="sys-stat"><span class="sys-dot green"></span>Battery<span class="sys-val">78%</span></div>
+      </div>
+      <div class="uptime-display">UPTIME: <span id="uptime-counter">00:00:00</span></div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">QUICK DIAL</div>
+      <div class="quick-dial-grid">
+        <button class="qdial-btn" onclick="alert('Dialing 100...')">🚔 100</button>
+        <button class="qdial-btn" onclick="alert('Dialing 1091...')">📞 1091</button>
+        <button class="qdial-btn" onclick="alert('Dialing 108...')">🚑 108</button>
+        <button class="qdial-btn qdial-sos" onclick="App.nav.switchScreen('sos')">🆘 SOS</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- MOBILE HAMBURGER -->
+<button id="mobile-menu" class="hidden" onclick="App.toggleSidebar()">☰</button>
+
+<script src="app.js"></script>
+</body>
+</html>
