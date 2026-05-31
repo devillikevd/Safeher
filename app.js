@@ -266,41 +266,68 @@ const App = {
 
   // ── SOS ──
   sos: {
-    holdTimer:null, holdStart:0, activated:false, alarmCtx:null, alarmOsc:null,
+    holdTimer:null, holdStart:0, activated:false, _activating:false, alarmCtx:null, alarmOsc:null,
     mediaRecorder:null, recordedChunks:[], cameraStream:null, audioStream:null,
     startHold() {
-      if(this.activated)return;
-      this.holdStart=Date.now();
-      const ring=document.getElementById('sos-ring-progress');
-      const update=()=>{
-        const elapsed=(Date.now()-this.holdStart)/3000;
-        ring.style.strokeDashoffset=628-(628*Math.min(elapsed,1));
-        if(elapsed>=1){this.activate();return;}
-        this.holdTimer=requestAnimationFrame(update);
+      if(this.activated || this._activating) return;
+      this._activating = true;
+      this.holdStart = Date.now();
+      const ring = document.getElementById('sos-ring-progress');
+      const btn = document.getElementById('sos-button');
+      if(btn) btn.style.transform = 'scale(0.95)';
+      const update = () => {
+        const elapsed = (Date.now() - this.holdStart) / 3000;
+        const progress = Math.min(elapsed, 1);
+        ring.style.strokeDashoffset = 628 - (628 * progress);
+        if(progress >= 1) { this.activate(); return; }
+        this.holdTimer = requestAnimationFrame(update);
       };
       update();
       document.getElementById('sos-abort').classList.remove('hidden');
     },
     endHold() {
-      if(!this.activated){cancelAnimationFrame(this.holdTimer);document.getElementById('sos-ring-progress').style.strokeDashoffset=628;document.getElementById('sos-abort').classList.add('hidden');}
+      if(!this.activated) {
+        this._activating = false;
+        cancelAnimationFrame(this.holdTimer);
+        this.holdTimer = null;
+        const ring = document.getElementById('sos-ring-progress');
+        if(ring) ring.style.strokeDashoffset = 628;
+        const btn = document.getElementById('sos-button');
+        if(btn) btn.style.transform = '';
+        document.getElementById('sos-abort').classList.add('hidden');
+      }
     },
     activate() {
-      this.activated=true;
+      if(this.activated) return; // Guard against double-fire
+      this.activated = true;
+      this._activating = false;
+      cancelAnimationFrame(this.holdTimer);
+      const btn = document.getElementById('sos-button');
+      if(btn) btn.style.transform = '';
+      // Fill ring completely
+      const ring = document.getElementById('sos-ring-progress');
+      if(ring) ring.style.strokeDashoffset = 0;
       document.body.classList.add('sos-flash');
-      setTimeout(()=>document.body.classList.remove('sos-flash'),500);
-      if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      setTimeout(() => document.body.classList.remove('sos-flash'), 500);
+      if(navigator.vibrate) navigator.vibrate([200,100,200,100,200]);
       // Auto-start evidence capture
       this.startEvidenceCapture();
-      const phases=document.querySelectorAll('#sos-phases .phase');
-      const contacts=document.querySelectorAll('#sos-contacts .contact-status');
-      let step=0;
-      const run=()=>{
-        if(step<phases.length){phases[step].classList.add('active');if(step>0)phases[step-1].classList.remove('active'),phases[step-1].classList.add('done');}
-        if(step===1){contacts[0].textContent='SMS Sent ✓';contacts[0].classList.add('sent');}
-        if(step===2){contacts[1].textContent='Calling...';contacts[1].classList.add('sent');this.capturePhoto();}
-        if(step===3){contacts[2].textContent='Notified ✓';contacts[2].classList.add('sent');phases[3].classList.remove('active');phases[3].classList.add('done');}
+      const phases = document.querySelectorAll('#sos-phases .phase');
+      const contacts = document.querySelectorAll('#sos-contacts .contact-status');
+      let step = 0;
+      const run = () => {
+        if(step < phases.length) {
+          phases[step].classList.add('active');
+          if(step > 0) { phases[step-1].classList.remove('active'); phases[step-1].classList.add('done'); }
+        }
+        if(step === 1 && contacts[0]) { contacts[0].textContent = 'SMS Sent ✓'; contacts[0].classList.add('sent'); }
+        if(step === 2 && contacts[1]) { contacts[1].textContent = 'Calling...'; contacts[1].classList.add('sent'); this.capturePhoto(); }
+        if(step === 3) {
+          if(contacts[2]) { contacts[2].textContent = 'Notified ✓'; contacts[2].classList.add('sent'); }
+          if(phases[3]) { phases[3].classList.remove('active'); phases[3].classList.add('done'); }
+        }
         step++;
-        if(step<=4)setTimeout(run,1200);
+        if(step <= 4) setTimeout(run, 1200);
       };
       run();
     },
@@ -397,12 +424,20 @@ const App = {
       App.vault.data.unshift({id:Date.now(),name,type:type==='photo'?'photo':'video',icon,time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'});
     },
     abort() {
-      this.activated=false;
+      this.activated = false;
+      this._activating = false;
+      cancelAnimationFrame(this.holdTimer);
+      this.holdTimer = null;
       this.stopRecording();
-      document.getElementById('sos-ring-progress').style.strokeDashoffset=628;
+      const ring = document.getElementById('sos-ring-progress');
+      if(ring) ring.style.strokeDashoffset = 628;
+      const btn = document.getElementById('sos-button');
+      if(btn) btn.style.transform = '';
       document.getElementById('sos-abort').classList.add('hidden');
-      document.querySelectorAll('#sos-phases .phase').forEach(p=>{p.classList.remove('active','done');});
-      document.querySelectorAll('#sos-contacts .contact-status').forEach(c=>{c.textContent='Ready';c.classList.remove('sent');});
+      document.querySelectorAll('#sos-phases .phase').forEach(p => { p.classList.remove('active','done'); });
+      document.querySelectorAll('#sos-contacts .contact-status').forEach(c => { c.textContent = 'Ready'; c.classList.remove('sent'); });
+      // Reset voice cooldown so it can trigger again
+      App.voice._sosCooldown = false;
     },
     startFakeCall() {
       document.getElementById('fake-call-overlay').classList.remove('hidden');
@@ -440,64 +475,113 @@ const App = {
   voice: {
     active:false, recognition:null, animId:null, analyser:null, audioCtx:null,
     keywords:['help','bachao','emergency','darr','police','raksha','scared'],
-    _sosCooldown:false,
+    _sosCooldown:false, _retryCount:0, _watchdog:null, _lastResult:0,
     // Auto-arm on boot — always listening regardless of screen
     autoArm() {
       this.active = true;
-      const badge = document.getElementById('voice-status-badge');
-      if(badge) badge.textContent = '🎤 LISTENING';
-      badge.style.color = '#00FF88';
-      const lbl = document.getElementById('voice-engine-label');
-      if(lbl) lbl.textContent = 'Voice Engine ARMED';
-      const st = document.getElementById('voice-status');
-      if(st) { st.innerHTML = '<span class="voice-dot"></span> LISTENING'; st.classList.add('listening'); }
-      const toggle = document.getElementById('voice-toggle');
-      if(toggle) toggle.checked = true;
-      this.startRecognition();
+      this._updateUI(true);
+      this._createRecognition();
+      this._startListening();
+      // Watchdog: check every 5s if recognition is alive, restart if dead
+      this._watchdog = setInterval(() => {
+        if(!this.active) return;
+        const silent = Date.now() - this._lastResult > 15000; // 15s no results
+        if(silent) {
+          console.log('[VOICE] Watchdog: no activity for 15s, restarting...');
+          this._restart();
+        }
+      }, 5000);
       console.log('[VOICE] 🎤 Always-on listening armed on boot');
     },
-    toggle(on) {
-      this.active=on;
-      const lbl=document.getElementById('voice-engine-label');
-      const st=document.getElementById('voice-status');
-      const badge=document.getElementById('voice-status-badge');
-      if(on){
-        lbl.textContent='Voice Engine ARMED';
-        st.innerHTML='<span class="voice-dot"></span> LISTENING';
-        st.classList.add('listening');
-        badge.textContent='🎤 LISTENING';
-        badge.style.color='#00FF88';
-        this.startRecognition();
+    _updateUI(on) {
+      const badge = document.getElementById('voice-status-badge');
+      const lbl = document.getElementById('voice-engine-label');
+      const st = document.getElementById('voice-status');
+      const toggle = document.getElementById('voice-toggle');
+      if(on) {
+        if(badge) { badge.textContent = '🎤 LISTENING'; badge.style.color = '#00FF88'; }
+        if(lbl) lbl.textContent = 'Voice Engine ARMED';
+        if(st) { st.innerHTML = '<span class="voice-dot"></span> LISTENING'; st.classList.add('listening'); }
+        if(toggle) toggle.checked = true;
       } else {
-        lbl.textContent='Voice Engine OFF';
-        st.innerHTML='<span class="voice-dot"></span> STANDBY';
-        st.classList.remove('listening');
-        badge.textContent='🎤 STANDBY';
-        badge.style.color='';
+        if(badge) { badge.textContent = '🎤 STANDBY'; badge.style.color = ''; }
+        if(lbl) lbl.textContent = 'Voice Engine OFF';
+        if(st) { st.innerHTML = '<span class="voice-dot"></span> STANDBY'; st.classList.remove('listening'); }
+        if(toggle) toggle.checked = false;
+      }
+    },
+    _createRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!SR) { console.log('[VOICE] SpeechRecognition API not available'); return; }
+      this.recognition = new SR();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-IN';
+      this.recognition.maxAlternatives = 3;
+      this.recognition.onresult = (e) => {
+        this._lastResult = Date.now();
+        this._retryCount = 0; // Reset retries on successful result
+        for(let i = e.resultIndex; i < e.results.length; i++) {
+          // Check all alternatives for better accuracy
+          for(let a = 0; a < e.results[i].length; a++) {
+            const t = e.results[i][a].transcript.toLowerCase();
+            this.keywords.forEach(k => { if(t.includes(k)) this.onKeyword(k); });
+          }
+        }
+      };
+      this.recognition.onerror = (e) => {
+        // 'no-speech' and 'aborted' are normal, not real errors
+        if(e.error === 'no-speech' || e.error === 'aborted') return;
+        console.log('[VOICE] Error:', e.error);
+        if(e.error === 'not-allowed') {
+          console.log('[VOICE] Microphone permission denied — cannot listen');
+          this._updateUI(false);
+          return;
+        }
+      };
+      this.recognition.onend = () => {
+        if(!this.active) return;
+        // Auto-restart with backoff
+        const delay = Math.min(300 * Math.pow(1.5, this._retryCount), 5000);
+        this._retryCount++;
+        console.log('[VOICE] Recognition ended, restarting in ' + delay + 'ms (retry #' + this._retryCount + ')');
+        setTimeout(() => this._startListening(), delay);
+      };
+    },
+    _startListening() {
+      if(!this.active || !this.recognition) return;
+      try {
+        this.recognition.start();
+        this._lastResult = Date.now();
+        console.log('[VOICE] Listening started');
+      } catch(e) {
+        // Already started — stop and restart
+        if(e.message && e.message.includes('already started')) return;
+        console.log('[VOICE] Start failed, will retry:', e.message);
+        setTimeout(() => this._restart(), 1000);
+      }
+    },
+    _restart() {
+      try { this.recognition.abort(); } catch(e) {}
+      // Recreate fresh instance to clear any stuck state
+      this._createRecognition();
+      this._startListening();
+    },
+    toggle(on) {
+      this.active = on;
+      this._updateUI(on);
+      if(on) {
+        this._retryCount = 0;
+        this._createRecognition();
+        this._startListening();
+      } else {
         this.stopRecognition();
       }
     },
-    startRecognition() {
-      try {
-        const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-        if(!SR){console.log('[VOICE] SpeechRecognition not supported');return;}
-        this.recognition=new SR();
-        this.recognition.continuous=true;
-        this.recognition.interimResults=true;
-        this.recognition.lang='en-IN';
-        this.recognition.onresult=(e)=>{
-          for(let i=e.resultIndex;i<e.results.length;i++){
-            const t=e.results[i][0].transcript.toLowerCase();
-            this.keywords.forEach(k=>{if(t.includes(k))this.onKeyword(k);});
-          }
-        };
-        this.recognition.onerror=(e)=>{console.log('[VOICE] Error:',e.error);};
-        this.recognition.onend=()=>{if(this.active){setTimeout(()=>{try{this.recognition.start();}catch(e){}},300);}};
-        this.recognition.start();
-        console.log('[VOICE] Recognition started');
-      }catch(e){console.log('[VOICE] Failed to start:',e);}
+    stopRecognition() {
+      try { this.recognition && this.recognition.abort(); } catch(e) {}
+      this.recognition = null;
     },
-    stopRecognition(){try{this.recognition&&this.recognition.stop();}catch(e){}},
     onKeyword(word) {
       console.log('[VOICE] 🔴 KEYWORD DETECTED: ' + word.toUpperCase());
       // Update UI on voice screen
