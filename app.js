@@ -298,19 +298,18 @@ const App = {
       }
     },
     activate() {
-      if(this.activated) return; // Guard against double-fire
+      if(this.activated) return;
       this.activated = true;
       this._activating = false;
       cancelAnimationFrame(this.holdTimer);
       const btn = document.getElementById('sos-button');
       if(btn) btn.style.transform = '';
-      // Fill ring completely
       const ring = document.getElementById('sos-ring-progress');
       if(ring) ring.style.strokeDashoffset = 0;
       document.body.classList.add('sos-flash');
       setTimeout(() => document.body.classList.remove('sos-flash'), 500);
       if(navigator.vibrate) navigator.vibrate([200,100,200,100,200]);
-      // Auto-start evidence capture
+      document.getElementById('sos-abort').classList.remove('hidden');
       this.startEvidenceCapture();
       const phases = document.querySelectorAll('#sos-phases .phase');
       const contacts = document.querySelectorAll('#sos-contacts .contact-status');
@@ -327,94 +326,259 @@ const App = {
           if(phases[3]) { phases[3].classList.remove('active'); phases[3].classList.add('done'); }
         }
         step++;
-        if(step <= 4) setTimeout(run, 1200);
+        if(step <= 4) {
+          setTimeout(run, 1200);
+        } else {
+          // Sequence done — auto-reset after 10s so SOS can be triggered again
+          console.log('[SOS] Sequence complete. Auto-reset in 10s...');
+          setTimeout(() => {
+            this.activated = false;
+            this._activating = false;
+            App.voice._sosCooldown = false;
+            if(ring) ring.style.strokeDashoffset = 628;
+            phases.forEach(p => p.classList.remove('active','done'));
+            contacts.forEach(c => { c.textContent = 'Ready'; c.classList.remove('sent'); });
+            document.getElementById('sos-abort').classList.add('hidden');
+            // Hide evidence panel on reset
+            const evPanel = document.getElementById('sos-evidence-panel');
+            if(evPanel) evPanel.classList.add('hidden');
+            const camBadge = document.getElementById('camera-overlay-badge');
+            if(camBadge) camBadge.textContent = '📹 REC';
+            console.log('[SOS] System reset — ready for next trigger');
+          }, 10000);
+        }
       };
       run();
     },
-    // Auto voice recording
-    async startEvidenceCapture() {
-      try {
-        // Request microphone + camera
-        const stream = await navigator.mediaDevices.getUserMedia({audio:true, video:true});
-        this.cameraStream = stream;
-        this.audioStream = stream;
-        // Start audio/video recording
-        this.recordedChunks = [];
-        this.mediaRecorder = new MediaRecorder(stream, {mimeType:'video/webm'});
-        this.mediaRecorder.ondataavailable = (e) => {
-          if(e.data.size > 0) this.recordedChunks.push(e.data);
+    // Auto voice + camera recording with live preview
+    _evidenceFileCount:0, _evidenceDB:null,
+    async _initEvidenceDB() {
+      if(this._evidenceDB) return this._evidenceDB;
+      return new Promise((resolve,reject) => {
+        const req = indexedDB.open('SafeHerEvidence', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if(!db.objectStoreNames.contains('evidence')) {
+            db.createObjectStore('evidence', {keyPath:'id'});
+          }
         };
-        this.mediaRecorder.onstop = () => this.saveRecording();
-        this.mediaRecorder.start(1000); // capture in 1s chunks
-        console.log('[SOS] 🎙️ Recording started — audio + video capturing');
-        // Show recording indicator
-        document.getElementById('sos-recording-status').classList.remove('hidden');
-        let sec=0;
-        this._recInterval=setInterval(()=>{sec++;const m=String(Math.floor(sec/60)).padStart(2,'0');const s=String(sec%60).padStart(2,'0');document.getElementById('rec-timer').textContent=m+':'+s;},1000);
-        // Auto-stop after 30 seconds
-        setTimeout(() => this.stopRecording(), 30000);
+        req.onsuccess = (e) => { this._evidenceDB = e.target.result; resolve(this._evidenceDB); };
+        req.onerror = () => { console.log('[SOS] IndexedDB unavailable'); resolve(null); };
+      });
+    },
+    async _storeEvidence(id, blob, meta) {
+      try {
+        const db = await this._initEvidenceDB();
+        if(!db) return;
+        const tx = db.transaction('evidence','readwrite');
+        tx.objectStore('evidence').put({id, blob, meta, timestamp:Date.now()});
+        await new Promise((r,j) => { tx.oncomplete=r; tx.onerror=j; });
+        const el = document.getElementById('ev-storage-status');
+        if(el) el.textContent = 'IndexedDB ✓';
+        console.log('[SOS] 💾 Evidence stored in IndexedDB: ' + meta.name);
       } catch(e) {
-        console.log('[SOS] Evidence capture: using fallback (permissions denied)');
-        this.saveMockEvidence('audio');
+        console.log('[SOS] IndexedDB store failed, using download fallback');
+        this._downloadBlob(blob, meta.name);
       }
     },
-    // Camera snapshot
+    _downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.style.display='none';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    },
+    _logEvidence(msg) {
+      const log = document.getElementById('evidence-capture-log');
+      if(!log) return;
+      const time = new Date().toLocaleTimeString('en-IN',{hour12:false,timeZone:'Asia/Kolkata'}).substring(0,5);
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">${time}</span> ${msg}`;
+      log.prepend(entry);
+    },
+    async startEvidenceCapture() {
+      this._evidenceFileCount = 0;
+      // Show the evidence panel
+      const panel = document.getElementById('sos-evidence-panel');
+      if(panel) panel.classList.remove('hidden');
+      // Clear log
+      const log = document.getElementById('evidence-capture-log');
+      if(log) log.innerHTML = '';
+      this._logEvidence('⚡ SOS activated — starting evidence capture');
+      // Try video+audio first, fallback to audio-only, then mock
+      let stream = null;
+      let hasVideo = false;
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        this._logEvidence('🚫 MediaDevices API not supported (requires HTTPS/localhost)');
+        this.saveMockEvidence('audio');
+        this.saveMockEvidence('photo');
+        return;
+      }
+
+      try {
+        // Use simplest constraints to maximize compatibility
+        stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+        hasVideo = true;
+        this._logEvidence('📹 Camera + Microphone access granted');
+      } catch(e) {
+        console.warn('[SOS] Video+Audio failed:', e);
+        this._logEvidence('⚠️ Camera denied or unavailable — trying audio only');
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({audio: true});
+          this._logEvidence('🎙️ Microphone access granted (audio-only mode)');
+        } catch(e2) {
+          console.error('[SOS] Audio also failed:', e2);
+          this._logEvidence('🚫 All media permissions denied — using mock evidence');
+          this.saveMockEvidence('audio');
+          this.saveMockEvidence('photo');
+          return;
+        }
+      }
+      this.cameraStream = stream;
+      this.audioStream = stream;
+      // Show live camera preview
+      if(hasVideo) {
+        const preview = document.getElementById('sos-camera-preview');
+        if(preview) {
+          preview.srcObject = stream;
+          preview.play().catch(()=>{});
+        }
+        this._logEvidence('📡 Live camera feed active');
+      } else {
+        const badge = document.getElementById('camera-overlay-badge');
+        if(badge) badge.textContent = '🎙️ AUDIO ONLY';
+      }
+      // Start MediaRecorder
+      this.recordedChunks = [];
+      const mimeType = hasVideo
+        ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
+          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus'
+          : 'video/webm')
+        : (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm');
+      try {
+        this.mediaRecorder = new MediaRecorder(stream, {mimeType});
+      } catch(e) {
+        this.mediaRecorder = new MediaRecorder(stream);
+      }
+      this.mediaRecorder.ondataavailable = (e) => {
+        if(e.data && e.data.size > 0) {
+          this.recordedChunks.push(e.data);
+          // Update size display
+          const totalSize = this.recordedChunks.reduce((s,c)=>s+c.size,0);
+          const el = document.getElementById('ev-rec-size');
+          if(el) el.textContent = totalSize > 1048576 ? (totalSize/1048576).toFixed(1)+' MB' : (totalSize/1024).toFixed(0)+' KB';
+        }
+      };
+      this.mediaRecorder.onstop = () => this.saveRecording(hasVideo);
+      this.mediaRecorder.start(); // capture entire recording to avoid chunking corruption
+      this._logEvidence('🔴 Recording started — ' + (hasVideo ? 'video + audio' : 'audio only'));
+      console.log('[SOS] 🎙️ Recording started — ' + mimeType);
+      // Show recording indicator
+      document.getElementById('sos-recording-status').classList.remove('hidden');
+      let sec = 0;
+      this._recInterval = setInterval(() => {
+        sec++;
+        const m = String(Math.floor(sec/60)).padStart(2,'0');
+        const s = String(sec%60).padStart(2,'0');
+        document.getElementById('rec-timer').textContent = m+':'+s;
+      }, 1000);
+      // Auto-capture a snapshot at 2s and 15s
+      if(hasVideo) {
+        setTimeout(() => this.capturePhoto(), 2000);
+        setTimeout(() => this.capturePhoto(), 15000);
+      }
+      // Auto-stop after 60 seconds (extended from 30)
+      this._autoStopTimer = setTimeout(() => this.stopRecording(), 60000);
+    },
+    // Camera snapshot from live feed
     async capturePhoto() {
       try {
         if(!this.cameraStream) {
-          const stream = await navigator.mediaDevices.getUserMedia({video:true});
-          this.cameraStream = stream;
+          this._logEvidence('⚠️ No camera stream for snapshot');
+          this.saveMockEvidence('photo');
+          return;
         }
-        const video = document.createElement('video');
-        video.srcObject = this.cameraStream;
-        video.play();
-        await new Promise(r => video.onloadedmetadata = r);
-        await new Promise(r => setTimeout(r, 500));
+        const preview = document.getElementById('sos-camera-preview');
+        const video = preview && preview.srcObject ? preview : document.createElement('video');
+        if(!preview || !preview.srcObject) {
+          video.srcObject = this.cameraStream;
+          video.muted = true;
+          video.playsInline = true;
+          video.play();
+          await new Promise(r => video.onloadedmetadata = r);
+          await new Promise(r => setTimeout(r, 300));
+        }
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        const photoData = canvas.toDataURL('image/jpeg', 0.7);
+        if(canvas.width === 0 || canvas.height === 0) {
+           canvas.width = 640; canvas.height = 480;
+        }
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const photoBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
         // Save to evidence vault
         const ts = new Date().toISOString().replace(/[:.]/g,'-');
         const hash = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
         const evidence = {id:Date.now(),name:`sos_photo_${ts}.jpg`,type:'photo',icon:'📸',time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'};
         App.vault.data.unshift(evidence);
-        // Store thumbnail reference
-        localStorage.setItem('sos_photo_'+evidence.id, photoData.substring(0,500));
+        this._evidenceFileCount++;
+        const el = document.getElementById('ev-file-count');
+        if(el) el.textContent = this._evidenceFileCount;
+        // Store in IndexedDB
+        if(photoBlob) await this._storeEvidence(evidence.id, photoBlob, evidence);
+        this._logEvidence('📸 Snapshot captured (' + (photoBlob ? (photoBlob.size/1024).toFixed(0)+'KB' : 'mock') + ')');
         console.log('[SOS] 📸 Photo captured & saved to Evidence Vault');
       } catch(e) {
-        console.log('[SOS] Camera capture fallback');
+        console.log('[SOS] Camera capture fallback:', e.message);
+        this._logEvidence('⚠️ Snapshot fallback — mock evidence saved');
         this.saveMockEvidence('photo');
       }
     },
     stopRecording() {
+      if(this._autoStopTimer) { clearTimeout(this._autoStopTimer); this._autoStopTimer = null; }
       if(this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
         this.mediaRecorder.stop();
+        this._logEvidence('⏹ Recording stopped');
         console.log('[SOS] 🛑 Recording stopped');
       }
       // Hide recording indicator
-      if(this._recInterval) clearInterval(this._recInterval);
+      if(this._recInterval) { clearInterval(this._recInterval); this._recInterval = null; }
       const recEl = document.getElementById('sos-recording-status');
       if(recEl) recEl.classList.add('hidden');
+      // Update camera overlay
+      const badge = document.getElementById('camera-overlay-badge');
+      if(badge) badge.textContent = '⏹ STOPPED';
+      // Stop live preview
+      const preview = document.getElementById('sos-camera-preview');
+      if(preview) preview.srcObject = null;
       // Stop all tracks
       if(this.cameraStream) { this.cameraStream.getTracks().forEach(t=>t.stop()); this.cameraStream=null; }
-      if(this.audioStream) { this.audioStream.getTracks().forEach(t=>t.stop()); this.audioStream=null; }
+      if(this.audioStream && this.audioStream !== this.cameraStream) { this.audioStream.getTracks().forEach(t=>t.stop()); }
+      this.audioStream = null;
     },
-    saveRecording() {
+    async saveRecording(hasVideo) {
       if(this.recordedChunks.length === 0) return;
-      const blob = new Blob(this.recordedChunks, {type:'video/webm'});
+      const mimeType = hasVideo ? 'video/webm' : 'audio/webm';
+      const ext = hasVideo ? 'webm' : 'webm';
+      const blob = new Blob(this.recordedChunks, {type:mimeType});
       const ts = new Date().toISOString().replace(/[:.]/g,'-');
       const hash = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
       // Add to evidence vault
-      const evidence = {id:Date.now(),name:`sos_recording_${ts}.webm`,type:'video',icon:'🎙️',time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'};
+      const evidence = {id:Date.now(),name:`sos_recording_${ts}.${ext}`,type:'video',icon:hasVideo?'🎥':'🎙️',time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'};
       App.vault.data.unshift(evidence);
-      // Create download link
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = evidence.name;
-      localStorage.setItem('sos_recording_url', url);
-      console.log('[SOS] 💾 Recording saved to Evidence Vault (' + (blob.size/1024).toFixed(1) + ' KB)');
+      this._evidenceFileCount++;
+      const el = document.getElementById('ev-file-count');
+      if(el) el.textContent = this._evidenceFileCount;
+      // Store in IndexedDB
+      await this._storeEvidence(evidence.id, blob, evidence);
+      // Also auto-download as backup
+      this._downloadBlob(blob, evidence.name);
+      const sizeStr = blob.size > 1048576 ? (blob.size/1048576).toFixed(1)+' MB' : (blob.size/1024).toFixed(0)+' KB';
+      this._logEvidence('💾 ' + (hasVideo?'Video':'Audio') + ' saved to vault (' + sizeStr + ')');
+      this._logEvidence('⬇️ Backup auto-downloaded: ' + evidence.name);
+      console.log('[SOS] 💾 Recording saved to Evidence Vault (' + sizeStr + ')');
     },
     saveMockEvidence(type) {
       const ts = new Date().toISOString().replace(/[:.]/g,'-');
@@ -422,13 +586,21 @@ const App = {
       const name = type==='photo' ? `sos_photo_${ts}.jpg` : `sos_audio_${ts}.webm`;
       const icon = type==='photo' ? '📸' : '🎙️';
       App.vault.data.unshift({id:Date.now(),name,type:type==='photo'?'photo':'video',icon,time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'});
+      this._evidenceFileCount++;
+      const el = document.getElementById('ev-file-count');
+      if(el) el.textContent = this._evidenceFileCount;
+      this._logEvidence((type==='photo'?'📸':'🎙️')+' Mock evidence generated: '+name);
     },
     abort() {
       this.activated = false;
       this._activating = false;
       cancelAnimationFrame(this.holdTimer);
       this.holdTimer = null;
+      if(this._autoStopTimer) { clearTimeout(this._autoStopTimer); this._autoStopTimer = null; }
       this.stopRecording();
+      // Hide evidence panel
+      const evPanel = document.getElementById('sos-evidence-panel');
+      if(evPanel) evPanel.classList.add('hidden');
       const ring = document.getElementById('sos-ring-progress');
       if(ring) ring.style.strokeDashoffset = 628;
       const btn = document.getElementById('sos-button');
@@ -474,24 +646,52 @@ const App = {
   // ── VOICE GUARDIAN ──
   voice: {
     active:false, recognition:null, animId:null, analyser:null, audioCtx:null,
-    keywords:['help','bachao','emergency','darr','police','raksha','scared'],
+    keywords:['help','bachao','emergency','darr','police','raksha','scared','हेल्प','बचाओ','इमरजेंसी','पुलिस','रक्षा','डर'],
     _sosCooldown:false, _retryCount:0, _watchdog:null, _lastResult:0,
+    _lastTriggeredKeyword:'', _lastTriggerTime:0, _currentLang:'hi-IN',
     // Auto-arm on boot — always listening regardless of screen
     autoArm() {
+      // Sync keywords from settings (in case user modified them previously)
+      this._syncKeywordsFromSettings();
       this.active = true;
       this._updateUI(true);
       this._createRecognition();
       this._startListening();
       // Watchdog: check every 5s if recognition is alive, restart if dead
+      this._startWatchdog();
+      // Handle canvas resize for voice screen
+      window.addEventListener('resize', () => {
+        if(App.currentScreen === 'voice') this.initCanvas();
+      });
+      console.log('[VOICE] 🎤 Always-on listening armed on boot');
+    },
+    _startWatchdog() {
+      this._clearWatchdog();
       this._watchdog = setInterval(() => {
         if(!this.active) return;
-        const silent = Date.now() - this._lastResult > 15000; // 15s no results
+        // Only restart if it has been silent for 60 seconds (15s was too aggressive and triggers browser anti-spam blocks)
+        const silent = Date.now() - this._lastResult > 60000; 
         if(silent) {
-          console.log('[VOICE] Watchdog: no activity for 15s, restarting...');
+          console.log('[VOICE] Watchdog: no activity for 60s, refreshing engine...');
           this._restart();
         }
-      }, 5000);
-      console.log('[VOICE] 🎤 Always-on listening armed on boot');
+      }, 20000);
+    },
+    _clearWatchdog() {
+      if(this._watchdog) { clearInterval(this._watchdog); this._watchdog = null; }
+    },
+    // Sync keywords from settings storage into active keywords list
+    _syncKeywordsFromSettings() {
+      try {
+        const stored = JSON.parse(localStorage.getItem('safeher_keywords') || '[]');
+        if(stored.length > 0) {
+          this.keywords = stored.map(k => k.toLowerCase().trim()).filter(k => k.length > 0);
+          // Always ensure Hindi defaults are present for hi-IN accuracy even with custom settings
+          const hindiDefaults = ['हेल्प','बचाओ','इमरजेंसी','पुलिस','रक्षा','डर'];
+          hindiDefaults.forEach(hk => { if(!this.keywords.includes(hk)) this.keywords.push(hk); });
+          console.log('[VOICE] Keywords synced from settings:', this.keywords.join(', '));
+        }
+      } catch(e) {}
     },
     _updateUI(on) {
       const badge = document.getElementById('voice-status-badge');
@@ -515,19 +715,36 @@ const App = {
       if(!SR) { console.log('[VOICE] SpeechRecognition API not available'); return; }
       this.recognition = new SR();
       this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-IN';
+      this.recognition.interimResults = true; // Use interim results for instant response
+      this.recognition.lang = this._currentLang;
       this.recognition.maxAlternatives = 3;
       this.recognition.onresult = (e) => {
         this._lastResult = Date.now();
         this._retryCount = 0; // Reset retries on successful result
+        // Collect all detected keywords from this result batch, deduplicated
+        const detectedKeywords = new Set();
         for(let i = e.resultIndex; i < e.results.length; i++) {
+          // Process all results (interim and final) for fastest response
           // Check all alternatives for better accuracy
           for(let a = 0; a < e.results[i].length; a++) {
             const t = e.results[i][a].transcript.toLowerCase();
-            this.keywords.forEach(k => { if(t.includes(k)) this.onKeyword(k); });
+            this.keywords.forEach(k => {
+              if(t.includes(k)) detectedKeywords.add(k);
+            });
           }
         }
+        // Fire onKeyword ONCE per unique keyword detected in this batch
+        detectedKeywords.forEach(k => {
+          // Debounce: don't re-trigger same keyword within 3 seconds
+          const now = Date.now();
+          if(k === this._lastTriggeredKeyword && (now - this._lastTriggerTime) < 3000) {
+            console.log('[VOICE] Debounced duplicate keyword: ' + k);
+            return;
+          }
+          this._lastTriggeredKeyword = k;
+          this._lastTriggerTime = now;
+          this.onKeyword(k);
+        });
       };
       this.recognition.onerror = (e) => {
         // 'no-speech' and 'aborted' are normal, not real errors
@@ -535,12 +752,15 @@ const App = {
         console.log('[VOICE] Error:', e.error);
         if(e.error === 'not-allowed') {
           console.log('[VOICE] Microphone permission denied — cannot listen');
+          this.active = false;
           this._updateUI(false);
+          this._clearWatchdog();
           return;
         }
       };
+      const currentInstance = this.recognition;
       this.recognition.onend = () => {
-        if(!this.active) return;
+        if(!this.active || this.recognition !== currentInstance) return;
         // Auto-restart with backoff
         const delay = Math.min(300 * Math.pow(1.5, this._retryCount), 5000);
         this._retryCount++;
@@ -555,14 +775,14 @@ const App = {
         this._lastResult = Date.now();
         console.log('[VOICE] Listening started');
       } catch(e) {
-        // Already started — stop and restart
-        if(e.message && e.message.includes('already started')) return;
-        console.log('[VOICE] Start failed, will retry:', e.message);
+        // Already started — ignore
+        console.log('[VOICE] Start warning:', e.message);
+        if(e.message && e.message.toLowerCase().includes('already started')) return;
         setTimeout(() => this._restart(), 1000);
       }
     },
     _restart() {
-      try { this.recognition.abort(); } catch(e) {}
+      try { if(this.recognition) this.recognition.abort(); } catch(e) {}
       // Recreate fresh instance to clear any stuck state
       this._createRecognition();
       this._startListening();
@@ -572,73 +792,88 @@ const App = {
       this._updateUI(on);
       if(on) {
         this._retryCount = 0;
+        this._syncKeywordsFromSettings(); // Re-sync keywords when toggling on
         this._createRecognition();
         this._startListening();
+        this._startWatchdog();
       } else {
+        this._clearWatchdog();
         this.stopRecognition();
       }
     },
     stopRecognition() {
-      try { this.recognition && this.recognition.abort(); } catch(e) {}
+      try { if(this.recognition) this.recognition.abort(); } catch(e) {}
       this.recognition = null;
     },
     onKeyword(word) {
       console.log('[VOICE] 🔴 KEYWORD DETECTED: ' + word.toUpperCase());
-      // Update UI on voice screen
-      const el=document.getElementById('voice-detected');
+      // Update UI on voice screen (null-safe for cross-screen)
+      const el = document.getElementById('voice-detected');
       if(el) el.classList.remove('hidden');
-      document.getElementById('detected-word').textContent=word.toUpperCase();
-      document.getElementById('detected-time').textContent=new Date().toLocaleTimeString();
-      document.querySelectorAll('.keyword').forEach(k=>{if(k.textContent===word)k.classList.add('triggered');});
-      setTimeout(()=>document.querySelectorAll('.keyword').forEach(k=>k.classList.remove('triggered')),3000);
+      const dw = document.getElementById('detected-word');
+      if(dw) dw.textContent = word.toUpperCase();
+      const dt = document.getElementById('detected-time');
+      if(dt) dt.textContent = new Date().toLocaleTimeString();
+      document.querySelectorAll('.keyword').forEach(k => {
+        // Match trimmed text content (ignore the ✕ in settings keywords)
+        const kText = k.textContent.replace(/\s*✕\s*$/, '').trim();
+        if(kText === word) k.classList.add('triggered');
+      });
+      setTimeout(() => document.querySelectorAll('.keyword').forEach(k => k.classList.remove('triggered')), 3000);
       // Update header threat badge
-      const badge=document.getElementById('threat-badge');
-      if(badge){badge.textContent='🔴 KEYWORD: '+word.toUpperCase();badge.style.color='var(--red)';}
+      const badge = document.getElementById('threat-badge');
+      if(badge) { badge.textContent = '🔴 KEYWORD: ' + word.toUpperCase(); badge.style.color = 'var(--red)'; }
       // AUTO-TRIGGER SOS — switch to SOS screen and activate
-      if(!this._sosCooldown && !App.sos.activated) {
+      if(!this._sosCooldown && !App.sos.activated && !App.sos._activating) {
         this._sosCooldown = true;
         console.log('[VOICE] ⚡ Auto-triggering SOS sequence!');
         // Flash the screen red
         document.body.classList.add('sos-flash');
-        setTimeout(()=>document.body.classList.remove('sos-flash'),500);
+        setTimeout(() => document.body.classList.remove('sos-flash'), 500);
         // Switch to SOS screen
         App.nav.switchScreen('sos');
         // Small delay then activate SOS
-        setTimeout(()=>{
+        setTimeout(() => {
           App.sos.activate();
         }, 500);
-        // Cooldown — prevent re-trigger for 30 seconds
-        setTimeout(()=>{ this._sosCooldown=false; }, 30000);
+        // NOTE: cooldown is cleared by SOS auto-reset (10s) or abort — no separate timer needed
       }
     },
     test() {
-      this.onKeyword(this.keywords[Math.floor(Math.random()*this.keywords.length)]);
+      // Force a test trigger bypassing debounce
+      this._lastTriggeredKeyword = '';
+      this._lastTriggerTime = 0;
+      this.onKeyword(this.keywords[Math.floor(Math.random() * this.keywords.length)]);
     },
-    setLang(lang,btn) {
-      btn.parentElement.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
+    setLang(lang, btn) {
+      btn.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      if(this.recognition){
-        const map={hi:'hi-IN',en:'en-IN',both:'en-IN'};
-        this.recognition.lang=map[lang]||'en-IN';
+      const map = {hi:'hi-IN', en:'en-IN', both:'en-IN'};
+      this._currentLang = map[lang] || 'en-IN';
+      // Restart recognition with the new language
+      if(this.active && this.recognition) {
+        console.log('[VOICE] Language changed to ' + this._currentLang + ', restarting...');
+        this._restart();
       }
     },
     initCanvas() {
-      const c=document.getElementById('waveform-canvas');
-      const ctx=c.getContext('2d');
-      c.width=c.offsetWidth;c.height=c.offsetHeight;
-      if(this.animId)cancelAnimationFrame(this.animId);
-      let phase=0;
-      const draw=()=>{
-        ctx.clearRect(0,0,c.width,c.height);
-        ctx.strokeStyle=this.active?'#00F5FF':'rgba(0,245,255,0.3)';
-        ctx.lineWidth=2;ctx.beginPath();
-        const amp=this.active?40:15;
-        for(let x=0;x<c.width;x++){
-          const y=c.height/2+Math.sin(x*.02+phase)*amp*Math.sin(x*.005+phase*.5)+Math.sin(x*.05+phase*2)*(amp*.3);
-          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      const c = document.getElementById('waveform-canvas');
+      if(!c) return;
+      const ctx = c.getContext('2d');
+      c.width = c.offsetWidth; c.height = c.offsetHeight;
+      if(this.animId) cancelAnimationFrame(this.animId);
+      let phase = 0;
+      const draw = () => {
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.strokeStyle = this.active ? '#00F5FF' : 'rgba(0,245,255,0.3)';
+        ctx.lineWidth = 2; ctx.beginPath();
+        const amp = this.active ? 40 : 15;
+        for(let x = 0; x < c.width; x++) {
+          const y = c.height/2 + Math.sin(x*.02+phase)*amp*Math.sin(x*.005+phase*.5) + Math.sin(x*.05+phase*2)*(amp*.3);
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
-        ctx.stroke();phase+=.05;
-        this.animId=requestAnimationFrame(draw);
+        ctx.stroke(); phase += .05;
+        this.animId = requestAnimationFrame(draw);
       };
       draw();
     }
@@ -740,7 +975,7 @@ const App = {
   // ── SETTINGS ──
   settings: {
     contacts: JSON.parse(localStorage.getItem('safeher_contacts')||'[{"name":"Priya (Sister)","phone":"9876543210"},{"name":"Mom","phone":"9876543211"},{"name":"Police","phone":"100"}]'),
-    keywords: JSON.parse(localStorage.getItem('safeher_keywords')||'["help","bachao","emergency","darr","police","raksha","scared"]'),
+    keywords: JSON.parse(localStorage.getItem('safeher_keywords')||'["help","bachao","emergency","darr","police","raksha","scared","हेल्प","बचाओ","इमरजेंसी","पुलिस","रक्षा","डर"]'),
     render() {
       const cDiv=document.getElementById('settings-contacts');
       cDiv.innerHTML=this.contacts.map((c,i)=>`<div class="contact-entry"><input class="cyber-input" value="${c.name}" onchange="App.settings.updateContact(${i},'name',this.value)" placeholder="Name"><input class="cyber-input" value="${c.phone}" onchange="App.settings.updateContact(${i},'phone',this.value)" placeholder="Phone"><button class="del-btn" onclick="App.settings.removeContact(${i})">✕</button></div>`).join('');
@@ -750,8 +985,10 @@ const App = {
     updateContact(i,field,val){this.contacts[i][field]=val;this.save();},
     removeContact(i){this.contacts.splice(i,1);this.save();this.render();},
     addContact(){this.contacts.push({name:'',phone:''});this.save();this.render();},
-    removeKeyword(i){this.keywords.splice(i,1);this.save();this.render();},
-    addKeyword(){const inp=document.getElementById('new-keyword');const v=inp.value.trim();if(v){this.keywords.push(v);inp.value='';this.save();this.render();}},
+    removeKeyword(i){this.keywords.splice(i,1);this.save();this.render();this._syncVoiceKeywords();},
+    addKeyword(){const inp=document.getElementById('new-keyword');const v=inp.value.trim();if(v){this.keywords.push(v);inp.value='';this.save();this.render();this._syncVoiceKeywords();}},
+    // Push updated keywords to the live voice engine immediately
+    _syncVoiceKeywords(){App.voice.keywords=this.keywords.map(k=>k.toLowerCase().trim()).filter(k=>k.length>0);console.log('[SETTINGS] Keywords synced to voice engine:', App.voice.keywords.join(', '));},
     save(){localStorage.setItem('safeher_contacts',JSON.stringify(this.contacts));localStorage.setItem('safeher_keywords',JSON.stringify(this.keywords));}
   },
 

@@ -178,6 +178,33 @@
           <span class="rec-dot"></span> <span>REC</span> — Audio + Video capturing evidence...
           <div class="rec-timer" id="rec-timer">00:00</div>
         </div>
+        <!-- LIVE CAMERA + EVIDENCE CAPTURE -->
+        <div class="sos-evidence-panel hidden" id="sos-evidence-panel">
+          <div class="evidence-capture-grid">
+            <div class="evidence-camera-card">
+              <div class="camera-header"><span class="rec-dot-sm"></span> LIVE CAMERA FEED</div>
+              <div class="camera-preview-wrap">
+                <video id="sos-camera-preview" autoplay playsinline muted></video>
+                <div class="camera-overlay-badge" id="camera-overlay-badge">📹 REC</div>
+              </div>
+              <div class="camera-actions">
+                <button class="action-btn" onclick="App.sos.capturePhoto()" id="sos-snap-btn">📸 SNAPSHOT</button>
+                <button class="action-btn" onclick="App.sos.stopRecording()" id="sos-stop-rec-btn">⏹ STOP RECORDING</button>
+              </div>
+            </div>
+            <div class="evidence-log-card">
+              <div class="info-card-title">📋 EVIDENCE CAPTURE LOG</div>
+              <div id="evidence-capture-log" class="evidence-log-feed">
+                <div class="log-entry"><span class="log-time">--:--</span> Waiting for SOS activation...</div>
+              </div>
+              <div class="evidence-stats">
+                <div class="ev-stat"><span>Files Captured</span><span id="ev-file-count" class="ev-val">0</span></div>
+                <div class="ev-stat"><span>Recording Size</span><span id="ev-rec-size" class="ev-val">0 KB</span></div>
+                <div class="ev-stat"><span>Storage</span><span id="ev-storage-status" class="ev-val">IndexedDB</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="sos-info-grid">
           <div class="info-card">
             <div class="info-card-title">🚔 EMERGENCY HELPLINES</div>

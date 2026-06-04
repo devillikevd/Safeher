@@ -139,6 +139,24 @@ selection{background:var(--red);color:#fff}
 .rec-dot{width:10px;height:10px;border-radius:50%;background:#ff0000;animation:pulse .8s infinite}
 .rec-timer{font-family:var(--font-h);font-size:.8rem;margin-left:auto;color:#ff4444}
 
+/* SOS EVIDENCE CAPTURE PANEL */
+.sos-evidence-panel{margin:20px auto;max-width:850px;animation:fadeIn .5s}
+.evidence-capture-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.evidence-camera-card,.evidence-log-card{background:linear-gradient(145deg,rgba(15,15,30,0.95),rgba(10,10,20,0.98));border:1px solid var(--border);border-radius:12px;padding:15px;box-shadow:var(--glow)}
+.camera-header{font-family:var(--font-h);font-size:.7rem;color:var(--red);letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.rec-dot-sm{width:8px;height:8px;border-radius:50%;background:#ff0000;animation:pulse .8s infinite;flex-shrink:0}
+.camera-preview-wrap{position:relative;border-radius:8px;overflow:hidden;background:#000;border:1px solid rgba(255,0,60,0.3);aspect-ratio:16/9;margin-bottom:10px}
+.camera-preview-wrap video{width:100%;height:100%;object-fit:cover;display:block}
+.camera-overlay-badge{position:absolute;top:8px;right:8px;background:rgba(255,0,0,0.8);color:#fff;font-family:var(--font-h);font-size:.55rem;padding:3px 8px;border-radius:4px;letter-spacing:1px;animation:pulse .8s infinite}
+.camera-actions{display:flex;gap:8px}
+.camera-actions .action-btn{flex:1;font-size:.65rem;padding:8px 10px;text-align:center}
+.evidence-log-feed{max-height:160px;overflow-y:auto;margin-bottom:10px}
+.evidence-log-feed .log-entry{font-size:.68rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+.evidence-stats{border-top:1px solid var(--border);padding-top:10px}
+.ev-stat{display:flex;justify-content:space-between;padding:4px 0;font-size:.7rem;color:var(--dim)}
+.ev-val{color:var(--cyan);font-family:var(--font-h);font-size:.65rem}
+@media(max-width:700px){.evidence-capture-grid{grid-template-columns:1fr}}
+
 /* VOICE */
 .voice-container{text-align:center}
 #waveform-canvas{width:100%;max-width:800px;height:150px;border:1px solid var(--border);border-radius:10px;margin:0 auto 20px;display:block;box-shadow:var(--glow)}
