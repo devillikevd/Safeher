@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 ```
 ███████╗ █████╗ ███████╗███████╗██╗  ██╗███████╗██████╗      ██████╗ ███████╗
@@ -18,7 +18,7 @@
 
 **Real-time voice surveillance • Automated SOS • AI risk analysis • Evidence chain custody**
 
-[🌐 Live Demo](https://safe-her-nu.vercel.app/) · [📖 Documentation](#modules-deep-dive) · [⚡ Quick Start](#quick-start)
+[🌐 Live Demo](https://safe-her1-eight.vercel.app/) · [📖 Documentation](#modules-deep-dive) · [⚡ Quick Start](#quick-start)
 
 ---
 
@@ -44,7 +44,7 @@ This repository is optimized for modern browsers and deploys instantly on Vercel
 
 ## 🚀 Live Deployment
 
-**Live Demo:** https://safe-her-nu.vercel.app/
+**Live Demo:** https://safe-her1-eight.vercel.app/
 
 ### Deployment summary
 
