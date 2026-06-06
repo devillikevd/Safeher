@@ -330,6 +330,7 @@ const App = {
       [70,'Syncing evidence vault...'],
       [85,'Establishing secure channel...'],
       [100,'SYSTEMS ONLINE']
+    ];
     let i = 0;
     const next = () => {
       if (i < steps.length) {
