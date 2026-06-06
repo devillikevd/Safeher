@@ -1210,6 +1210,14 @@ const App = {
       if(this.cameraStream) { this.cameraStream.getTracks().forEach(t=>t.stop()); this.cameraStream=null; }
       if(this.audioStream && this.audioStream !== this.cameraStream) { this.audioStream.getTracks().forEach(t=>t.stop()); }
       this.audioStream = null;
+
+      // CRITICAL FIX: Restart Voice Guardian engine after releasing the microphone
+      if(App.voice && App.voice.active) {
+        setTimeout(() => {
+          console.log('[SOS] Restarting Voice Guardian after mic release...');
+          App.voice._restart();
+        }, 1500); // Wait for browser to fully release hardware locks
+      }
     },
     async saveRecording(hasVideo) {
       if(this.recordedChunks.length === 0) return;
