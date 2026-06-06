@@ -1042,16 +1042,18 @@ const App = {
       }
       // Start MediaRecorder
       this.recordedChunks = [];
-      const mimeType = hasVideo
-        ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
-          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus'
-          : 'video/webm')
-        : (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm');
+      
+      // Simplify MIME type to prevent codec compatibility errors on some devices
+      const mimeType = hasVideo ? 'video/webm' : 'audio/webm';
+      const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : {};
+      
       try {
-        this.mediaRecorder = new MediaRecorder(stream, {mimeType});
+        this.mediaRecorder = new MediaRecorder(stream, options);
       } catch(e) {
+        console.warn('[SOS] MediaRecorder fallback:', e);
         this.mediaRecorder = new MediaRecorder(stream);
       }
+      
       this.mediaRecorder.ondataavailable = (e) => {
         if(e.data && e.data.size > 0) {
           this.recordedChunks.push(e.data);
@@ -1062,9 +1064,12 @@ const App = {
         }
       };
       this.mediaRecorder.onstop = () => this.saveRecording(hasVideo);
-      this.mediaRecorder.start(); // capture entire recording to avoid chunking corruption
+      
+      // Use a timeslice of 1000ms to ensure chunks are pushed reliably
+      this.mediaRecorder.start(1000); 
+      
       this._logEvidence('🔴 Recording started — ' + (hasVideo ? 'video + audio' : 'audio only'));
-      console.log('[SOS] 🎙️ Recording started — ' + mimeType);
+      console.log('[SOS] 🎙️ Recording started');
       // Show recording indicator
       document.getElementById('sos-recording-status').classList.remove('hidden');
       let sec = 0;
