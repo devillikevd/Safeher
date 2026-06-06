@@ -867,13 +867,8 @@ const App = {
             if(ring) ring.style.strokeDashoffset = 628;
             phases.forEach(p => p.classList.remove('active','done'));
             contacts.forEach(c => { c.textContent = 'Ready'; c.classList.remove('sent'); });
-            document.getElementById('sos-abort').classList.add('hidden');
-            // Hide evidence panel on reset
-            const evPanel = document.getElementById('sos-evidence-panel');
-            if(evPanel) evPanel.classList.add('hidden');
-            const camBadge = document.getElementById('camera-overlay-badge');
-            if(camBadge) camBadge.textContent = '📹 REC';
-            console.log('[SOS] System reset — ready for next trigger');
+            // Do NOT hide the evidence panel here. Let it record until 60s or manual stop.
+            console.log('[SOS] UI reset — ready for next trigger, but recording continues...');
           }, 10000);
         }
       };
@@ -1155,9 +1150,12 @@ const App = {
     },
     async saveRecording(hasVideo) {
       if(this.recordedChunks.length === 0) return;
-      const mimeType = hasVideo ? 'video/webm' : 'audio/webm';
-      const ext = hasVideo ? 'webm' : 'webm';
-      const blob = new Blob(this.recordedChunks, {type:mimeType});
+      const actualMime = this.mediaRecorder ? this.mediaRecorder.mimeType : (hasVideo ? 'video/webm' : 'audio/webm');
+      let ext = 'webm';
+      if(actualMime.includes('mp4')) ext = 'mp4';
+      if(actualMime.includes('ogg')) ext = 'ogg';
+      
+      const blob = new Blob(this.recordedChunks, {type: actualMime || (hasVideo ? 'video/webm' : 'audio/webm')});
       const ts = new Date().toISOString().replace(/[:.]/g,'-');
       const hash = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
       // Add to evidence vault
