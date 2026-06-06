@@ -26,7 +26,7 @@ const App = {
   },
 
   async runFaceScanBoot() {
-    App.speak("Initiating biometric verification.");
+    App.speak("Initiating biometric verification.", true);
     const scanScreen = document.getElementById('face-scan-screen');
     const scanVideo = document.getElementById('face-scan-video');
     scanScreen.classList.remove('hidden');
@@ -44,7 +44,7 @@ const App = {
     setTimeout(() => {
       document.getElementById('face-scan-text').textContent = "BIOMETRIC MATCH CONFIRMED";
       document.getElementById('face-scan-text').style.color = "var(--green)";
-      App.speak("Identity verified. Welcome back, Guardian.");
+      App.speak("Identity verified. Welcome back, Guardian.", true);
       sessionStorage.setItem('safeher_face_verified', 'true');
       
       setTimeout(() => {
@@ -330,7 +330,6 @@ const App = {
       [70,'Syncing evidence vault...'],
       [85,'Establishing secure channel...'],
       [100,'SYSTEMS ONLINE']
-    ];
     let i = 0;
     const next = () => {
       if (i < steps.length) {
@@ -340,7 +339,7 @@ const App = {
         setTimeout(next, 400);
       } else {
         text.textContent = 'SAFEHER OS READY';
-        App.speak("Welcome to Safe Her OS. All systems online.");
+        App.speak("Welcome to Safe Her OS. All systems online.", true);
         setTimeout(() => {
           document.getElementById('boot-screen').style.opacity = '0';
           document.getElementById('boot-screen').style.transition = 'opacity 0.8s';
@@ -384,7 +383,27 @@ const App = {
     } else alert('Location shared: 26.8467°N, 80.9462°E (mock)');
   },
   
-  speak(text) {
+  sysAudio: false,
+  toggleSysAudio() {
+    this.sysAudio = !this.sysAudio;
+    const btn = document.getElementById('sys-audio-toggle');
+    if (btn) {
+      if (this.sysAudio) {
+        btn.innerHTML = '🔊 SYS AUDIO: ON';
+        btn.style.color = 'var(--green)';
+        btn.style.borderColor = 'var(--green)';
+        this.speak("System audio enabled.", true);
+      } else {
+        btn.innerHTML = '🔇 SYS AUDIO: OFF';
+        btn.style.color = 'var(--red)';
+        btn.style.borderColor = 'var(--red)';
+        if(window.speechSynthesis) window.speechSynthesis.cancel();
+      }
+    }
+  },
+
+  speak(text, force=false) {
+    if(!this.sysAudio && !force) return;
     if(!window.speechSynthesis) return;
     const msg = new SpeechSynthesisUtterance(text);
     // Find a female voice if possible
