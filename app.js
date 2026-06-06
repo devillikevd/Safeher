@@ -1195,8 +1195,24 @@ const App = {
       if(actualMime.includes('ogg')) ext = 'ogg';
       
       const blob = new Blob(this.recordedChunks, {type: actualMime || (hasVideo ? 'video/webm' : 'audio/webm')});
+      const blobUrl = URL.createObjectURL(blob);
       const ts = new Date().toISOString().replace(/[:.]/g,'-');
       const hash = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+      
+      // ── SHOW IN-BROWSER PLAYBACK (works without any external player) ──
+      const preview = document.getElementById('sos-camera-preview');
+      if(preview && hasVideo) {
+        preview.srcObject = null;
+        preview.src = blobUrl;
+        preview.muted = false;
+        preview.controls = true;
+        preview.loop = false;
+        preview.play().catch(()=>{});
+        this._logEvidence('▶️ Playback ready — play in browser below');
+      }
+      const badge = document.getElementById('camera-overlay-badge');
+      if(badge) badge.textContent = '✅ SAVED — PRESS PLAY';
+
       // Add to evidence vault
       const evidence = {id:Date.now(),name:`sos_recording_${ts}.${ext}`,type:'video',icon:hasVideo?'🎥':'🎙️',time:new Date().toLocaleString(),gps:'26.8467°N, 80.9462°E',hash:hash.substring(0,24),status:'SECURED'};
       App.vault.data.unshift(evidence);
@@ -1205,11 +1221,11 @@ const App = {
       if(el) el.textContent = this._evidenceFileCount;
       // Store in IndexedDB
       await this._storeEvidence(evidence.id, blob, evidence);
-      // Also auto-download as backup
+      // Auto-download as backup
       this._downloadBlob(blob, evidence.name);
       const sizeStr = blob.size > 1048576 ? (blob.size/1048576).toFixed(1)+' MB' : (blob.size/1024).toFixed(0)+' KB';
       this._logEvidence('💾 ' + (hasVideo?'Video':'Audio') + ' saved to vault (' + sizeStr + ')');
-      this._logEvidence('⬇️ Backup auto-downloaded: ' + evidence.name);
+      this._logEvidence('⬇️ Backup downloaded: ' + evidence.name + ' — open in Chrome if needed');
       console.log('[SOS] 💾 Recording saved to Evidence Vault (' + sizeStr + ')');
     },
     saveMockEvidence(type) {
