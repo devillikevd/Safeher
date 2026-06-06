@@ -1,301 +1,108 @@
 <div align="center">
+  <img src="https://i.imgur.com/uR1RhyO.png" alt="SafeHer OS Logo" width="140" />
+  <h1 style="font-family: monospace;">[ SafeHer OS v1.0 ]</h1>
+  <p><strong>Next-Generation Cyber-Emergency Operating System for Women's Safety</strong></p>
+  
+  [![Hackathon Project](https://img.shields.io/badge/Status-Hackathon_Ready-00FF88?style=for-the-badge&logo=rocket)]()
+  [![Tech Stack](https://img.shields.io/badge/Architecture-HTML5_|_CSS3_|_Vanilla_JS-00F5FF?style=for-the-badge&logo=javascript)]()
+  [![Hardware APIs](https://img.shields.io/badge/Hardware_Integrations-WebRTC_|_Gyro_|_Geolocation-FF003C?style=for-the-badge&logo=microchip)]()
 
-```
-███████╗ █████╗ ███████╗███████╗██╗  ██╗███████╗██████╗      ██████╗ ███████╗
-██╔════╝██╔══██╗██╔════╝██╔════╝██║  ██║██╔════╝██╔══██╗    ██╔═══██╗██╔════╝
-███████╗███████║█████╗  █████╗  ███████║███████║██║  ██║    ╚██████╔╝███████║
-╚════██║██╔══██║██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██╔══██╗    ██║   ██║╚════██║
-███████║██║  ██║██║     ███████╗██║  ██║███████║██║  ██║    ╚██████╔╝███████║
-╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚══════╝
-```
-
-### ⚔️ CYBER-EMERGENCY OPERATING SYSTEM FOR WOMEN SAFETY
-
-![Version](https://img.shields.io/badge/VERSION-1.0.0-FF003C?style=for-the-badge&labelColor=0A0A0F)
-![Status](https://img.shields.io/badge/STATUS-OPERATIONAL-00FF88?style=for-the-badge&labelColor=0A0A0F)
-![Build](https://img.shields.io/badge/BUILD-STABLE-00F5FF?style=for-the-badge&labelColor=0A0A0F)
-![License](https://img.shields.io/badge/LICENSE-MIT-FFB300?style=for-the-badge&labelColor=0A0A0F)
-
-**Real-time voice surveillance • Automated SOS • AI risk analysis • Evidence chain custody**
-
-[🌐 Live Demo](https://safe-her1-eight.vercel.app/) · [📖 Documentation](#modules-deep-dive) · [⚡ Quick Start](#quick-start)
-
----
-
+  <h3>🚀 Engineered by Team Code Clash</h3>
+  <p><strong>Team Leader:</strong> Anushka Upadhyay &nbsp;|&nbsp; <strong>Team Member:</strong> Vyom Dubey</p>
 </div>
 
-## 🧬 What is SafeHer OS?
+<br/>
 
-SafeHer OS is a **mission-critical women's safety command system** built as a futuristic operating system interface. It combines continuous voice monitoring, smart route insights, emergency automation, incident reporting, and evidence preservation in a single static web app.
-
-This repository is optimized for modern browsers and deploys instantly on Vercel.
-
-### Core capabilities
-
-- **Always-on voice guardian** with keyword detection
-- **Automated SOS activation** with hold-to-trigger interaction
-- **Evidence capture** using camera + mic
-- **Interactive safe route map** for Lucknow
-- **Incident reporting** with cryptographic evidence hashing
-- **Local evidence vault** with tamper-resistant storage
-- **Cyberpunk UX** with animated dashboard visuals
+> **SafeHer OS** is not a standard mobile application. It is a full-scale, browser-native "Command Center" designed to transform any device into an impenetrable, proactive bodyguard. Leveraging predictive AI, hardware-level API integrations, and offline mesh simulations, SafeHer detects threats *before* they escalate.
 
 ---
 
-## 🚀 Live Deployment
-
-**Live Demo:** https://safe-her1-eight.vercel.app/
-
-### Deployment summary
-
-- Host: **Vercel**
-- Type: **Static HTML/CSS/JS**
-- Map provider: **Leaflet + CartoDB dark tiles**
-- Voice engine: **Web SpeechRecognition API**
-- Media capture: **MediaRecorder API**
-- Crypto: **Web Crypto SHA-256**
+## 📑 Table of Contents
+1. [Core Capabilities](#-core-capabilities)
+2. [Advanced Security Modules](#-advanced-security-modules)
+3. [Technical Architecture](#-technical-architecture)
+4. [Hardware & Web API Integrations](#-hardware--web-api-integrations)
+5. [Hackathon Demo Guide](#-hackathon-demo-guide)
 
 ---
 
-## 🏗️ System Architecture
+## ⚡ Core Capabilities
 
-```
-safeher-os/
-├── index.html        # UI shell and main markup
-├── styles.css        # Cyberpunk theme, layout, motion
-├── app.js            # Core application logic
-├── vercel.json       # Vercel deployment settings
-└── README.md         # Project documentation
-```
-
-### Technology matrix
-
-| Layer | Technology | Purpose |
-|------|-----------|---------|
-| UI | HTML5 | Semantic interface structure |
-| Styling | CSS3 | Glassmorphism, animations, responsive layout |
-| Runtime | Vanilla JavaScript | Zero-dependency feature engine |
-| Mapping | Leaflet 1.9.4 | Route safety visualization |
-| Voice | SpeechRecognition API | Keyword detection and voice trigger |
-| Media | MediaRecorder API | Audio/video evidence capture |
-| Crypto | Web Crypto API | SHA-256 hash generation |
-| Storage | localStorage | Contacts, reports, settings, vault |
-| Deployment | Vercel | Static hosting with secure headers |
+| Module | Description | Tech Implementation |
+| :--- | :--- | :--- |
+| **Always-On Voice Guardian** | Listens continuously in the background for distress keywords (e.g., "Help", "Police"). Triggers SOS without physical interaction. | `window.SpeechRecognition` API with local audio processing. |
+| **Predictive AI Check-ins** | AI Guardian monitors location metrics and automatically triggers an incoming Voice Call warning if entering a high-risk zone. | `window.speechSynthesis` + AudioContext Oscillators. |
+| **Immutable Evidence Vault** | Automated capture of front/rear camera video and microphone audio. Data is hashed instantly to prevent tampering. | `MediaRecorder` API + Crypto API hashing. |
+| **Dynamic Safe Routes** | Real-time routing across 35 unique locations in Lucknow, computing dynamic safety scores based on algorithmic threat density. | `Leaflet.js` + Procedural Path Generation. |
 
 ---
 
-## 🧩 Feature Overview
+## 🛡️ Advanced Security Modules
 
-### 1. Command Dashboard
+### <kbd>System.AntiCoercion(Stealth_Mode)</kbd>
+If forced by an attacker to unlock the device, the user can activate **Stealth Mode**, which instantly overrides the DOM to display a fully functional, boring Calculator app. 
+- *Secret Handshake:* Typing `1234=` safely returns to the OS.
+- *Duress Trigger:* Typing `7+7+7=` silently dispatches an SOS protocol while keeping the calculator visible.
 
-- Animated KPI cards for incidents, routes, guardians, and evidence
-- Threat escalation bar with four levels
-- Embedded Leaflet map with Lucknow safety points
-- Activity feed showing recent events
-- Quick actions for SOS, fake call, location sharing, and voice arm
+### <kbd>System.Hardware(Spy_Detector)</kbd>
+Addresses the modern threat of hidden cameras in hotel rooms and changing rooms. The OS taps into the rear camera and applies a high-contrast Infrared (IR) visual filter overlay. A sweeping HUD scans the environment and automatically identifies potential IR emitters/lens reflections.
 
-### 2. Safe Routes Navigation
+### <kbd>System.Network(Offline_Mesh)</kbd>
+To counter the vulnerability of internet blackouts, SafeHer features an **Offline Mesh Network Visualizer**. It demonstrates the underlying peer-to-peer protocol by actively mapping and pinging nearby Bluetooth/Wi-Fi Direct "SafeHer Nodes" to bounce SOS signals to safety.
 
-- Interactive route visualization
-- Heatmap toggle and safe-route filter
-- Location-specific safety score display
-- Distance, estimated time, and warning panel
+### <kbd>System.Telemetry(Escort_Mode)</kbd>
+A strictly supervised trip tracking protocol. Once activated, the system monitors device telemetry. If the user stops for >5 minutes or deviates from the path, guardians are alerted. Ending the trip requires a secure 4-digit PIN.
 
-### 3. SOS Emergency Console
-
-- 3-second hold-to-activate SOS button
-- Multi-phase emergency sequence
-- Automatic audio/video capture
-- Built-in emergency helpline directory
-- Fake call decoy for threat deterrence
-
-### 4. Voice Guardian
-
-- Auto-arms on boot
-- Continuous listening across screens
-- Auto-reconnect fallback when speech recognition drops
-- Multi-language support: Hindi and English
-- Real-time waveform visualization
-- Detection log and trigger history
-
-### 5. Incident Report
-
-- Structured incident form
-- Category selection with location auto-fill
-- File upload for supporting evidence
-- Anonymous reporting enabled by default
-- SHA-256 evidence fingerprint generation
-- Persistent browser storage
-
-### 6. AI Guardian (Optional)
-
-- Safety chatbot interface
-- Risk assessment badges for responses
-- Quick action query chips
-- Optional Anthropic Claude integration via localStorage key
-- Offline fallback responses when API is unavailable
-
-### 7. Evidence Vault
-
-- Encrypted evidence listing
-- Filters for photos, videos, and reports
-- SHA-256 hash chain for proof integrity
-- Storage meter and download-ready entries
-- 3D card hover interaction
-
-### 8. System Settings
-
-- Emergency contact management
-- Custom voice keywords
-- Alert channel toggles
-- Privacy and capture controls
-- Local storage persistence
+### <kbd>System.Biometrics(Wearable_Sync)</kbd>
+A simulated data-pipe to the user's smartwatch. Constantly monitors heart rate (BPM). If the OS detects a severe **Adrenaline Spike** (BPM > 120), it throws a preemptive alert asking the user if they wish to arm the SOS.
 
 ---
 
-## 🎨 Visual Engineering
+## 🏗️ Technical Architecture
 
-| Effect | Technique |
-|--------|-----------|
-| Boot sequence | CSS transitions + JS timed steps |
-| Particle network | Canvas 2D with dynamic line links |
-| Scanline overlay | `repeating-linear-gradient` with animated background |
-| 3D card tilt | `perspective(600px)` and pointer tracking |
-| Glassmorphism | `backdrop-filter: blur(20px)` + translucent borders |
-| Neon glow | Multi-layer box-shadow effects |
-| GPS scramble | Animated digit randomization to final coordinates |
-| SOS pulse | `@keyframes` breathing shadow effect |
-| Counter animation | `requestAnimationFrame` count-up sequence |
-| Live clock | IST timezone formatting with `setInterval` |
-| Uptime tracker | Runtime counter from app boot time |
-| Waveform | Canvas-based amplitude visualization |
+<details>
+<summary><b>Click to view architectural deep-dive</b></summary>
+
+SafeHer OS was built with a strict **"Zero Dependency, Maximum Speed"** philosophy. In a life-or-death emergency, waiting for React to render or NPM packages to load is unacceptable.
+
+1. **Vanilla Core:** Built entirely on HTML5, CSS3, and modern ES6 JavaScript.
+2. **Asynchronous Non-blocking UI:** Heavy tasks (like Video Recording and AI Speech Synthesis) run without freezing the UI thread.
+3. **Cyberpunk UI/UX:** Utilizes advanced CSS Variables, Glassmorphism techniques, and hardware-accelerated `@keyframes` for a visually stunning 3D depth effect.
+4. **Local State Management:** Utilizes `localStorage` and `sessionStorage` for immediate persistence, ensuring data survives accidental reloads.
+
+</details>
 
 ---
 
-## 📍 Lucknow Safety Intelligence
+## 🔌 Hardware & Web API Integrations
 
-| Zone | Score | Status | Notes |
-|------|:-----:|--------|-------|
-| Lulu Mall Area | 95 | 🟢 Safe | Commercial, high visibility |
-| Hazratganj | 92 | 🟢 Safe | Core police and CCTV coverage |
-| Gomti Nagar | 90 | 🟢 Safe | Residential and business hub |
-| Indira Nagar | 87 | 🟢 Safe | Well-lit neighborhood |
-| Gomti Riverfront | 85 | 🟢 Safe | Public recreation area |
-| Mahanagar | 82 | 🟢 Safe | Residential colony |
-| Amausi Airport | 70 | 🟡 Moderate | Transit area |
-| Aminabad | 64 | 🟡 Moderate | Busy market lanes |
-| Kaiserbagh | 61 | 🟡 Moderate | Historical district |
-| Charbagh Station | 58 | 🟡 Moderate | Railway transit zone |
-| 1090 Chauraha | 55 | 🟡 Moderate | Intersection hub |
-| Alambagh | 32 | 🔴 Avoid | High incident density |
+The true power of SafeHer lies in its deep integration with native browser APIs, acting more like native software than a website:
+*   🎙️ **`getUserMedia()`**: Secures camera and microphone access for the Evidence Vault.
+*   🗣️ **`SpeechRecognition` & `speechSynthesis`**: Creates a fully functional, conversational AI interface.
+*   📳 **`DeviceMotionEvent`**: Listens to raw X/Y/Z axis acceleration, allowing users to trigger an SOS by violently shaking the device.
+*   📍 **`Geolocation API`**: Provides sub-meter accuracy for live tracking links.
+*   📳 **`navigator.vibrate`**: Provides haptic feedback for blind operation in pockets.
 
 ---
 
-## ⚡ Quick Start
+## 🎮 Hackathon Demo Guide
 
-```bash
-# Clone the repository
-git clone https://github.com/your-username/safeher-os.git
-cd safeher-os
+This project is configured in **"Zero-Setup Hackathon Mode"**. 
 
-# Option 1: Open locally
-start index.html          # Windows
-open index.html           # macOS
-
-# Option 2: Use a local server
-npx serve . -l 3000
-
-# Option 3: VS Code Live Server
-# Right-click index.html → Open with Live Server
-```
-
-### Browser requirements
-
-- Chrome / Edge v80+ recommended
-- Microphone required for voice guardian
-- Camera required for evidence capture
-- Location required for GPS-enabled features
-- HTTPS required for camera/microphone access in deployed mode
-
-### Optional AI integration
-
-```javascript
-localStorage.setItem('safeher_api_key', 'your-anthropic-api-key');
-```
-
----
-
-## 🔧 Deployment Notes
-
-This project is configured for Vercel with no build step required.
-
-### Manual Vercel deployment
-
-```bash
-npm i -g vercel
-vercel
-vercel --prod
-```
-
-### Configured by `vercel.json`
-
-- static file hosting
-- security headers
-- asset cache TTL
-- SPA fallback to `index.html`
-
----
-
-## 🔐 Security & Privacy
-
-SafeHer OS is designed to keep data local and limit external exposure.
-
-- **Client-side first**: the app runs entirely in browser
-- **No analytics / tracking** by default
-- **localStorage** used for contacts, reports, settings, and evidence metadata
-- **SHA-256 hashing** secures evidence fingerprints
-- **Permission workflow** for camera, mic, and location
-- **No backend required** for core safety features
-
----
-
-## 📋 API Reference
-
-```javascript
-App.nav.switchScreen('sos')      // Navigate to SOS screen
-App.sos.activate()               // Trigger SOS sequence
-App.sos.startFakeCall()          // Launch fake call overlay
-App.sos.toggleAlarm()            // Toggle siren alarm
-App.voice.autoArm()              // Arm voice recognition
-App.voice.test()                 // Simulate keyword detection
-App.chat.send()                  // Send AI message
-App.vault.render()               // Refresh evidence vault UI
-App.shareLocation()              // Share GPS coordinates
-App.settings.addContact()        // Add emergency contact
-App.settings.addKeyword()        // Add voice keyword
-```
-
----
-
-## ⚡ Credit
-
-Built for women's safety, with a focus on intelligent response, immersive UI, and data integrity.
-
-Made in 🇮🇳 India | Lucknow Edition
+**To run the presentation:**
+1. Open `index.html` in a modern browser.
+2. The system automatically bypasses the database login and triggers the cinematic **Face ID Biometric Scan**.
+3. Accept the Camera/Mic permissions.
+4. **Pitch Flow Recommendation:**
+   - *Start* with the hacker-style Audit Trail Terminal on the right panel.
+   - *Demonstrate* the **Spy Detector** (Left Sidebar) to show hardware capabilities.
+   - *Click* the **AI Guardian Check-in** (Quick Contacts) to demonstrate Voice Synthesis.
+   - *Showcase* the **Stealth Calculator** to explain the psychological defense layers.
+   - *Trigger* the main **SOS Button** to show the automated camera recording and Evidence Vault hashing.
 
 ---
 
 <div align="center">
-
-```
-╔══════════════════════════════════════════════╗
-║                                              ║
-║    SAFEHER OS v1.0 — SYSTEMS OPERATIONAL     ║
-║    Because safety is not optional.           ║
-║                                              ║
-╚══════════════════════════════════════════════╝
-```
-
-**Built with 🛡️ for women's safety**
-
+  <code>[ EOF: System Armed ]</code>
+  <p>Proudly developed by <strong>Team Code Clash</strong>.</p>
 </div>

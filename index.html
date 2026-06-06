@@ -9,11 +9,81 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- LOGIN SCREEN (shown before boot) -->
+<div id="login-screen" class="hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 100 120" width="70" height="84">
+        <path d="M50 5 L90 25 L90 60 Q90 95 50 115 Q10 95 10 60 L10 25 Z" fill="none" stroke="#FF003C" stroke-width="3"/>
+        <path d="M50 20 L75 35 L75 58 Q75 82 50 98 Q25 82 25 58 L25 35 Z" fill="rgba(255,0,60,0.1)" stroke="#FF003C" stroke-width="1.5"/>
+        <text x="50" y="68" text-anchor="middle" fill="#FF003C" font-family="Orbitron" font-size="22" font-weight="700">S</text>
+      </svg>
+    </div>
+    <div class="login-title">SAFEHER OS</div>
+    <div class="login-subtitle">SECURE AUTHENTICATION REQUIRED</div>
+
+    <!-- Phase 1: Phone Input -->
+    <div id="login-phone-phase">
+      <div class="login-form-group">
+        <label>PHONE NUMBER</label>
+        <div class="login-input-row">
+          <span class="login-prefix">+91</span>
+          <input type="tel" id="login-phone" class="login-input" placeholder="Enter 10-digit number" maxlength="10" autocomplete="tel">
+        </div>
+      </div>
+      <button class="login-btn" id="login-send-otp" onclick="App.auth.sendOTP()">SEND OTP</button>
+    </div>
+
+    <!-- Phase 2: OTP Input (hidden initially) -->
+    <div id="login-otp-phase" class="hidden">
+      <div class="login-form-group">
+        <label>ENTER 6-DIGIT OTP</label>
+        <div class="login-otp-row">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="0">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="1">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="2">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="3">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="4">
+          <input type="text" class="login-otp-digit" maxlength="1" inputmode="numeric" data-otp-idx="5">
+        </div>
+      </div>
+      <button class="login-btn" id="login-verify-otp" onclick="App.auth.verifyOTP()">VERIFY & ENTER</button>
+      <div class="login-timer" id="login-timer"></div>
+    </div>
+
+    <div class="login-status" id="login-status"></div>
+    <div class="login-divider"></div>
+    <div class="login-byp">SafeHer Hackathon Mode <span style="color:var(--green)">[Zero Setup Active]</span></div>
+  </div>
+</div>
+
+<!-- FACE ID BOOT SEQUENCE -->
+<div id="face-scan-screen" class="hidden" style="position:fixed; inset:0; z-index:9999; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--cyan); font-family:var(--font-m);">
+  <div style="position:relative; width:280px; height:280px; margin-bottom:30px;">
+    <!-- Camera Preview -->
+    <video id="face-scan-video" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover; border-radius:50%; filter:grayscale(100%) contrast(1.2); opacity:0.6;"></video>
+    <!-- Scanning HUD Overlay -->
+    <div style="position:absolute; inset:0; border:2px solid var(--cyan); border-radius:50%; box-shadow:0 0 30px rgba(0,245,255,0.3);">
+      <!-- Radar Sweep Line -->
+      <div class="face-scan-line" style="position:absolute; top:0; left:0; width:100%; height:50%; border-bottom:3px solid var(--cyan); background:linear-gradient(to bottom, transparent, rgba(0,245,255,0.2)); animation:scanUpDown 2s infinite ease-in-out alternate;"></div>
+      <!-- HUD Reticles -->
+      <div style="position:absolute; top:10%; left:10%; width:20px; height:20px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan);"></div>
+      <div style="position:absolute; top:10%; right:10%; width:20px; height:20px; border-top:2px solid var(--cyan); border-right:2px solid var(--cyan);"></div>
+      <div style="position:absolute; bottom:10%; left:10%; width:20px; height:20px; border-bottom:2px solid var(--cyan); border-left:2px solid var(--cyan);"></div>
+      <div style="position:absolute; bottom:10%; right:10%; width:20px; height:20px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan);"></div>
+    </div>
+  </div>
+  <div id="face-scan-text" style="font-family:var(--font-h); font-size:1.5rem; letter-spacing:2px; animation:pulse 1s infinite;">BIOMETRIC SCAN IN PROGRESS...</div>
+  <div id="face-scan-subtext" style="font-size:0.8rem; color:var(--dim); margin-top:10px;">Verifying Guardian Identity</div>
+</div>
+
 <!-- BOOT SCREEN -->
-<div id="boot-screen">
+<div id="boot-screen" class="hidden">
   <div class="boot-content">
     <div class="boot-logo">
       <svg class="shield-icon" viewBox="0 0 100 120" width="80" height="96">
@@ -66,6 +136,10 @@
       <li class="nav-item" data-screen="report"><span class="nav-icon">📝</span><span class="nav-label">Report Incident</span></li>
       <li class="nav-item" data-screen="aichat"><span class="nav-icon">🤖</span><span class="nav-label">AI Guardian</span></li>
       <li class="nav-item" data-screen="evidence"><span class="nav-icon">🔒</span><span class="nav-label">Evidence Vault</span></li>
+      <li class="nav-item" data-screen="detector"><span class="nav-icon">📷</span><span class="nav-label">Spy Detector</span></li>
+      <li class="nav-item" data-screen="liveshare"><span class="nav-icon">📡</span><span class="nav-label">Live Share</span></li>
+      <li class="nav-item" data-screen="escort"><span class="nav-icon">🚶</span><span class="nav-label">Escort Mode</span></li>
+      <li class="nav-item" data-screen="community"><span class="nav-icon">🗺️</span><span class="nav-label">Community</span></li>
       <li class="nav-item" data-screen="settings"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></li>
     </ul>
   </nav>
@@ -130,7 +204,44 @@
         <div class="map-container">
           <div id="main-map" style="width:100%;height:100%;"></div>
           <div class="map-controls">
-            <input type="text" id="route-search" placeholder="Enter destination..." class="cyber-input">
+            <select id="route-search" class="cyber-input" style="width:200px;" onchange="App.routes.demoRoute(this.value)">
+              <option value="" disabled selected>Select Destination...</option>
+              <option value="Hazratganj">Hazratganj</option>
+              <option value="Charbagh Railway Station">Charbagh Railway Station</option>
+              <option value="Gomti Nagar">Gomti Nagar</option>
+              <option value="Aminabad">Aminabad</option>
+              <option value="Alambagh">Alambagh</option>
+              <option value="Chowk">Chowk</option>
+              <option value="Indira Nagar">Indira Nagar</option>
+              <option value="Mahanagar">Mahanagar</option>
+              <option value="Kapoorthala">Kapoorthala</option>
+              <option value="Janeshwar Mishra Park">Janeshwar Mishra Park</option>
+              <option value="Bhootnath Market">Bhootnath Market</option>
+              <option value="Munshi Pulia">Munshi Pulia</option>
+              <option value="Wave Mall">Wave Mall</option>
+              <option value="Phoenix Palassio">Phoenix Palassio</option>
+              <option value="Lulu Mall">Lulu Mall</option>
+              <option value="Ekana Stadium">Ekana Stadium</option>
+              <option value="Bada Imambara">Bada Imambara</option>
+              <option value="Chota Imambara">Chota Imambara</option>
+              <option value="Rumi Darwaza">Rumi Darwaza</option>
+              <option value="The Residency">The Residency</option>
+              <option value="Ambedkar Park">Ambedkar Park</option>
+              <option value="KD Singh Babu Stadium">KD Singh Babu Stadium</option>
+              <option value="Lucknow University">Lucknow University</option>
+              <option value="IT College">IT College</option>
+              <option value="KGMU Hospital">KGMU Hospital</option>
+              <option value="SGPGI Hospital">SGPGI Hospital</option>
+              <option value="Transport Nagar">Transport Nagar</option>
+              <option value="Ashiyana">Ashiyana</option>
+              <option value="Rajajipuram">Rajajipuram</option>
+              <option value="Vikas Nagar">Vikas Nagar</option>
+              <option value="Aliganj">Aliganj</option>
+              <option value="Gomti Riverfront">Gomti Riverfront</option>
+              <option value="Chinhat">Chinhat</option>
+              <option value="Polytechnic Chauraha">Polytechnic Chauraha</option>
+              <option value="Telibagh">Telibagh</option>
+            </select>
             <div class="map-toggles">
               <button class="toggle-btn active" onclick="App.routes.toggleHeatmap(this)">HEATMAP</button>
               <button class="toggle-btn" onclick="App.routes.toggleSafeOnly(this)">SAFE ONLY</button>
@@ -173,6 +284,11 @@
         <div class="sos-extras">
           <button class="action-btn" onclick="App.sos.startFakeCall()">📞 FAKE CALL</button>
           <button class="action-btn" onclick="App.sos.toggleAlarm()">🔊 ALARM</button>
+          <label class="toggle-switch" style="display:inline-flex; align-items:center; margin-left:15px;" title="Shake 4 times or press Volume Down 3 times to trigger">
+            <span style="font-size:0.7rem; color:var(--amber); margin-right:8px;">GESTURE SOS</span>
+            <input type="checkbox" id="gesture-sos-toggle" onchange="App.gestureSOS.toggle(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <div class="sos-recording-status hidden" id="sos-recording-status">
           <span class="rec-dot"></span> <span>REC</span> — Audio + Video capturing evidence...
@@ -368,6 +484,133 @@
         </div>
       </section>
 
+      <!-- SPY DETECTOR -->
+      <section id="screen-detector" class="screen">
+        <div class="screen-title">HIDDEN CAMERA DETECTOR</div>
+        <div class="glass-panel" style="padding:20px; text-align:center;">
+          <p style="color:var(--dim); font-size:0.8rem; margin-bottom:15px;">Scanning for Infrared (IR) reflections typical of hidden camera lenses. Slowly sweep your device across the room.</p>
+          <div style="position:relative; width:100%; max-width:600px; height:400px; margin:0 auto; background:#000; border:2px solid var(--red); border-radius:10px; overflow:hidden; box-shadow:0 0 20px rgba(255,0,0,0.2);">
+            <!-- Camera Feed with IR Filter -->
+            <video id="detector-video" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover; filter:sepia(100%) hue-rotate(300deg) saturate(300%) contrast(150%); opacity:0.8;"></video>
+            
+            <!-- Scanning HUD Overlay -->
+            <div style="position:absolute; inset:0; pointer-events:none;">
+              <div style="position:absolute; top:0; left:0; width:100%; height:10px; background:rgba(255,0,0,0.5); box-shadow:0 0 15px var(--red); animation:scanUpDown 3s infinite linear;"></div>
+              
+              <!-- Crosshairs -->
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:60px; height:60px; border:2px dashed rgba(255,255,255,0.3); border-radius:50%;"></div>
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:2px; height:100px; background:rgba(255,255,255,0.1);"></div>
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100px; height:2px; background:rgba(255,255,255,0.1);"></div>
+            </div>
+            
+            <!-- Detected Blips -->
+            <div id="detector-blips" style="position:absolute; inset:0; pointer-events:none;"></div>
+            
+            <!-- Status overlay -->
+            <div id="detector-status" style="position:absolute; bottom:10px; left:10px; right:10px; background:rgba(0,0,0,0.8); color:var(--red); padding:10px; font-family:var(--font-h); letter-spacing:1px; border:1px solid var(--red);">[SYSTEM] SCANNING... NO EMITTERS FOUND</div>
+          </div>
+          <div class="form-row" style="justify-content:center; gap:15px; margin-top:20px;">
+            <button class="action-btn" style="border-color:var(--red); color:var(--red);" id="btn-start-detector" onclick="App.detector.start()">START SCAN</button>
+            <button class="action-btn" onclick="App.detector.stop()">STOP CAMERA</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVE SHARE -->
+      <section id="screen-liveshare" class="screen">
+        <div class="screen-title">LIVE LOCATION SHARE</div>
+        <div class="glass-panel" style="text-align:center; padding:30px;">
+          <h2 style="color:var(--cyan); margin-bottom:15px;">Generate Public GPS Link</h2>
+          <p style="color:var(--dim); font-size:0.8rem; margin-bottom:20px;">Share a real-time tracking link with anyone. No login required for them.</p>
+          <div class="form-row" style="justify-content:center; gap:15px; margin-bottom:25px;">
+            <select id="share-duration" class="cyber-input" style="width:150px;">
+              <option value="1">1 Hour</option>
+              <option value="2">2 Hours</option>
+              <option value="12">12 Hours</option>
+            </select>
+            <button class="action-btn" id="start-share-btn" onclick="App.liveShare.start()">START SHARING</button>
+          </div>
+          <div id="share-active-panel" class="hidden" style="background:rgba(0,255,136,0.1); border:1px solid var(--green); padding:20px; border-radius:10px;">
+            <div style="color:var(--green); font-weight:bold; margin-bottom:10px;">📡 LINK ACTIVE</div>
+            <input type="text" id="share-link-input" class="cyber-input" readonly style="width:100%; text-align:center; margin-bottom:15px;">
+            <div class="form-row" style="justify-content:center; gap:10px;">
+              <button class="action-btn" onclick="App.liveShare.copyLink()">📋 COPY</button>
+              <button class="action-btn" onclick="App.liveShare.shareWhatsApp()">💬 WHATSAPP</button>
+              <button class="action-btn" style="border-color:var(--red); color:var(--red);" onclick="App.liveShare.stop()">STOP</button>
+            </div>
+            <div id="live-viewer-feed" style="margin-top:20px; font-size:0.8rem; text-align:left; max-height:100px; overflow-y:auto; padding-top:15px; border-top:1px solid rgba(0,255,136,0.2);">
+              <div style="color:var(--cyan); margin-bottom:5px;">👁️ ACTIVE VIEWERS (0)</div>
+              <div id="viewer-list" style="color:var(--dim);">Waiting for guardians to connect...</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="color:var(--cyan); margin: 20px 0 10px 0;">Past Share Sessions</h3>
+        <div id="liveshare-recent" style="display:flex; flex-direction:column; gap:10px;"></div>
+      </section>
+
+      <!-- ESCORT MODE -->
+      <section id="screen-escort" class="screen">
+        <div class="screen-title">ESCORT MODE</div>
+        <div class="glass-panel" style="padding:20px;">
+          <h3 style="color:var(--cyan); margin-bottom:15px;">Start Supervised Trip</h3>
+          <p style="color:var(--dim); font-size:0.75rem; margin-bottom:15px;">Auto-triggers SOS if you stop for >5 mins or deviate from the route.</p>
+          <div class="form-group">
+            <label>DESTINATION</label>
+            <input type="text" id="escort-dest" class="cyber-input" value="Sahara Ganj Mall, Hazratganj" placeholder="Enter destination or search map...">
+          </div>
+          <div class="form-group" style="margin-top:15px;">
+            <label>SECURITY LEVEL</label>
+            <select id="escort-level" class="cyber-input">
+              <option value="standard">🟢 Standard (5 min stop alert)</option>
+              <option value="elevated">🟡 Elevated (2 min stop alert + frequent pings)</option>
+              <option value="maximum">🔴 Maximum (1 min stop alert + Stealth Mic)</option>
+            </select>
+          </div>
+          <button class="qdial-btn" style="width:100%; padding:15px; font-size:1rem; margin-top:15px;" id="start-escort-btn" onclick="App.escort.start()">START ESCORT</button>
+          
+          <div id="escort-active-panel" class="hidden" style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+              <span style="color:var(--cyan); font-weight:bold;">🚶 TRIP IN PROGRESS</span>
+              <span id="escort-status-text" style="color:var(--green); font-size:0.8rem;">On Route</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--dim); margin-bottom:10px;">Enter security PIN (1234) to end trip safely. Wrong PIN triggers SOS!</div>
+            <div class="form-row" style="gap:10px;">
+              <input type="password" id="escort-end-pin" class="cyber-input" placeholder="Enter PIN" style="flex:1; text-align:center; font-family:var(--font-h); letter-spacing:3px;">
+              <button class="action-btn" style="flex:2; border-color:var(--green); color:var(--green);" onclick="App.escort.arriveSafe()">ARRIVED SAFELY</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Trips Demo Content -->
+        <h3 style="color:var(--cyan); margin: 20px 0 10px 0;">Recent Trips</h3>
+        <div id="escort-recent-trips" style="display:flex; flex-direction:column; gap:10px;"></div>
+      </section>
+
+      <!-- COMMUNITY MAP -->
+      <section id="screen-community" class="screen">
+        <div class="screen-title">COMMUNITY SAFETY MAP</div>
+        <div class="glass-panel" style="padding:20px; margin-bottom:20px;">
+          <h3 style="color:var(--cyan); margin-bottom:15px;">Add to Public Safety Map</h3>
+          <div class="form-row" style="gap:10px;">
+            <select id="comm-pin-type" class="cyber-input" style="flex:1;">
+              <option value="unsafe">🔴 Unsafe Zone</option>
+              <option value="incident">⚠️ Recent Incident</option>
+              <option value="safe">🟢 Safe Spot</option>
+            </select>
+            <input type="text" id="comm-pin-desc" class="cyber-input" style="flex:2;" placeholder="Short description...">
+            <button class="action-btn" onclick="App.community.addPin()">DROP PIN</button>
+          </div>
+        </div>
+        <!-- Note: the actual map will render on the Safe Routes map, but we can load a smaller map here or just direct them to Safe Routes -->
+        <div style="text-align:center; padding:20px; color:var(--dim); font-size:0.8rem;">
+          Pins dropped here will appear on the global <a href="#" onclick="App.nav.switchScreen('saferoutes')" style="color:var(--cyan);">Safe Routes Map</a>.
+        </div>
+        
+        <h3 style="color:var(--cyan); margin: 20px 0 10px 0;">Recent Community Pins</h3>
+        <div id="comm-recent-pins" style="display:flex; flex-direction:column; gap:10px;"></div>
+      </section>
+
       <!-- SETTINGS -->
       <section id="screen-settings" class="screen">
         <div class="screen-title">SYSTEM SETTINGS</div>
@@ -390,11 +633,19 @@
             <div class="setting-row"><span>SMS Alerts</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
             <div class="setting-row"><span>Call Alerts</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
             <div class="setting-row"><span>WhatsApp Alerts</span><label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label></div>
+            <div class="setting-row"><span>Gesture SOS (Shake 4x)</span><label class="toggle-switch"><input type="checkbox" id="setting-gesture" checked><span class="toggle-slider"></span></label></div>
           </div>
           <div class="settings-section">
-            <h3>Privacy & Capture</h3>
+            <h3>Privacy & Stealth</h3>
             <div class="setting-row"><span>Anonymous Reporting</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
             <div class="setting-row"><span>Auto-Evidence Capture</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+            <div class="setting-row" style="margin-top:15px; border-top:1px solid var(--border); padding-top:15px;">
+              <div style="display:flex; flex-direction:column;">
+                <span>Decoy Screen</span>
+                <span style="font-size:0.6rem; color:var(--dim);">Masks app as a calculator. Secret code triggers SOS.</span>
+              </div>
+              <button class="action-btn" onclick="App.decoy.activate()">ACTIVATE</button>
+            </div>
           </div>
           <div class="settings-section">
             <h3>System</h3>
@@ -416,21 +667,30 @@
       </div>
     </div>
     <div class="rp-section">
-      <div class="panel-title">QUICK CONTACTS</div>
-      <div class="quick-contact"><span>👩 Priya</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
-      <div class="quick-contact"><span>👩 Mom</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
-      <div class="quick-contact"><span>🚔 Police</span><div><button class="sm-btn" title="Call">📞</button><button class="sm-btn" title="SMS">💬</button></div></div>
+      <div class="panel-title" style="display:flex; justify-content:space-between;">BIOMETRICS <span style="color:var(--cyan);">⌚ SYNCED</span></div>
+      <div style="text-align:center; padding:10px 0;">
+        <div style="font-size:2.5rem; color:var(--red); font-family:var(--font-h); text-shadow:0 0 15px rgba(255,0,60,0.5);" id="bpm-display">72</div>
+        <div style="font-size:0.7rem; color:var(--dim); margin-top:5px;">BPM (Heart Rate)</div>
+      </div>
+      <button class="action-btn" style="width:100%; border-color:var(--amber); color:var(--amber); font-size:0.65rem;" onclick="App.biometrics.simulateStress()">SIMULATE STRESS SPIKE</button>
     </div>
     <div class="rp-section">
-      <div class="panel-title">THREAT GAUGE</div>
-      <div class="threat-gauge">
-        <svg viewBox="0 0 120 120" width="120" height="120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
-          <circle cx="60" cy="60" r="50" fill="none" stroke="#00F5FF" stroke-width="8" stroke-dasharray="78.5 314" stroke-linecap="round" transform="rotate(-90 60 60)" id="threat-gauge-circle"/>
-          <text x="60" y="58" text-anchor="middle" fill="#00F5FF" font-family="Orbitron" font-size="16" font-weight="700" id="threat-gauge-text">25%</text>
-          <text x="60" y="75" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="Share Tech Mono" font-size="9">THREAT</text>
-        </svg>
+      <div class="panel-title">QUICK CONTACTS</div>
+      <div class="quick-contact"><span>🤖 AI Guardian</span><div><button class="sm-btn" title="Simulate Risk Check-in" onclick="App.sos.startFakeCall('AI GUARDIAN', true)">📞</button></div></div>
+      <div class="quick-contact"><span>👩 Priya</span><div><button class="sm-btn" title="Call" onclick="App.sos.startFakeCall('Priya')">📞</button><button class="sm-btn" title="SMS" onclick="alert('Secure SMS sent to Priya: I am safe.')">💬</button></div></div>
+      <div class="quick-contact"><span>👩 Mom</span><div><button class="sm-btn" title="Call" onclick="App.sos.startFakeCall('Mom')">📞</button><button class="sm-btn" title="SMS" onclick="alert('Secure SMS sent to Mom: I am safe.')">💬</button></div></div>
+      <div class="quick-contact"><span>🚔 Police</span><div><button class="sm-btn" title="Call" onclick="alert('Dialing 100 via secure network...')">📞</button><button class="sm-btn" title="SMS" onclick="alert('Silent SOS SMS sent to UP Police.')">💬</button></div></div>
+    </div>
+    <div class="rp-section">
+      <div class="panel-title">ACTIVE RADAR</div>
+      <div class="radar-container" style="position:relative; width:120px; height:120px; margin:0 auto; border-radius:50%; border:2px solid rgba(0,245,255,0.3); background:repeating-radial-gradient(rgba(0,245,255,0.1) 0, transparent 10%, transparent 20%); overflow:hidden; box-shadow:0 0 20px rgba(0,245,255,0.1) inset;">
+        <div class="radar-sweep" style="position:absolute; top:50%; left:50%; width:60px; height:60px; background:linear-gradient(45deg, rgba(0,245,255,1) 0%, transparent 50%); transform-origin:0 0; animation:radarRotate 3s linear infinite;"></div>
+        <div style="position:absolute; inset:0; border-radius:50%; box-shadow:inset 0 0 10px #00F5FF;"></div>
+        <!-- Blip container -->
+        <div id="radar-blips"></div>
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:4px; height:4px; background:#fff; border-radius:50%; box-shadow:0 0 10px #fff;"></div>
       </div>
+      <div style="text-align:center; margin-top:5px; font-size:0.6rem; color:var(--dim);">Scanning radius: 500m</div>
     </div>
     <div class="rp-section">
       <div class="panel-title">RECENT ALERTS</div>
@@ -452,6 +712,24 @@
       <div class="uptime-display">UPTIME: <span id="uptime-counter">00:00:00</span></div>
     </div>
     <div class="rp-section">
+      <div class="panel-title">OFFLINE MESH NETWORK</div>
+      <div style="text-align:center; margin-bottom:10px;">
+        <span style="font-size:0.6rem; color:var(--cyan);">SafeHer Peer-to-Peer Protocol Active</span>
+      </div>
+      <div class="mesh-network-container" style="position:relative; width:100%; height:100px; border-radius:6px; background:rgba(0,0,0,0.5); border:1px solid rgba(0,245,255,0.2); overflow:hidden;">
+        <!-- Center Node (You) -->
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:12px; height:12px; background:var(--cyan); border-radius:50%; box-shadow:0 0 10px var(--cyan); z-index:2;"></div>
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:30px; height:30px; border:1px solid var(--cyan); border-radius:50%; animation:pulse 2s infinite; opacity:0.5;"></div>
+        
+        <!-- Animated Nodes container -->
+        <div id="mesh-nodes-container" style="position:absolute; inset:0;"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--dim); margin-top:5px;">
+        <span>Nodes Connected: <span id="mesh-node-count" style="color:var(--cyan);">0</span></span>
+        <span>Range: ~200m</span>
+      </div>
+    </div>
+    <div class="rp-section">
       <div class="panel-title">QUICK DIAL</div>
       <div class="quick-dial-grid">
         <button class="qdial-btn" onclick="alert('Dialing 100...')">🚔 100</button>
@@ -460,12 +738,38 @@
         <button class="qdial-btn qdial-sos" onclick="App.nav.switchScreen('sos')">🆘 SOS</button>
       </div>
     </div>
+    <div class="rp-section">
+      <div class="panel-title">ANTI-COERCION</div>
+      <button class="action-btn" style="width:100%; border-color:var(--dim);" onclick="App.decoy.activate()">📱 STEALTH MODE</button>
+      <div style="font-size:0.6rem; color:var(--dim); text-align:center; margin-top:5px;">Type 1234= to exit</div>
+    </div>
+    <div class="rp-section" style="border:none; margin-bottom:0; padding-bottom:0;">
+      <div class="panel-title">SYSTEM AUDIT TRAIL</div>
+      <div id="terminal-feed" style="background:#050505; border:1px solid rgba(0,245,255,0.2); border-radius:6px; padding:10px; height:120px; overflow-y:auto; font-family:var(--font-m); font-size:0.65rem; color:#0f0; box-shadow:inset 0 0 10px rgba(0,0,0,0.8); line-height:1.4;">
+        <div style="color:var(--dim);">[SYS] Initializing kernel...</div>
+        <div style="color:var(--dim);">[SYS] SafeHer OS v1.0.0 Online.</div>
+      </div>
+    </div>
   </aside>
 </div>
 
 <!-- MOBILE HAMBURGER -->
 <button id="mobile-menu" class="hidden" onclick="App.toggleSidebar()">☰</button>
 
+<!-- DECOY OVERLAY -->
+<div id="decoy-screen" class="hidden">
+  <div class="decoy-header">Calculator</div>
+  <div class="decoy-display" id="decoy-display">0</div>
+  <div class="decoy-keypad">
+    <button class="decoy-btn func">C</button><button class="decoy-btn func">+/-</button><button class="decoy-btn func">%</button><button class="decoy-btn op">÷</button>
+    <button class="decoy-btn num">7</button><button class="decoy-btn num">8</button><button class="decoy-btn num">9</button><button class="decoy-btn op">×</button>
+    <button class="decoy-btn num">4</button><button class="decoy-btn num">5</button><button class="decoy-btn num">6</button><button class="decoy-btn op">-</button>
+    <button class="decoy-btn num">1</button><button class="decoy-btn num">2</button><button class="decoy-btn num">3</button><button class="decoy-btn op">+</button>
+    <button class="decoy-btn num zero">0</button><button class="decoy-btn num">.</button><button class="decoy-btn op eq">=</button>
+  </div>
+</div>
+
+<script src="supabase-config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

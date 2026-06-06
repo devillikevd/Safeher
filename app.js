@@ -1,8 +1,320 @@
 // SafeHer OS — Main Application
 const App = {
   currentScreen: 'dashboard',
+  currentUser: null,
   init() {
-    this.bootSequence();
+    const urlParams = new URLSearchParams(window.location.search);
+    if(urlParams.has('share')) {
+      return this._bootGuardianView(urlParams.get('share'));
+    }
+    // Bypass login for zero-setup hackathon mode
+    const boot = document.getElementById('boot-screen');
+    if (boot && boot.classList.contains('hidden')) {
+      if(!sessionStorage.getItem('safeher_face_verified')) {
+        this.runFaceScanBoot();
+      } else {
+        boot.classList.remove('hidden');
+        this.bootSequence();
+      }
+    }
+    this.liveShare.loadHistory();
+    if(this.biometrics) this.biometrics.init();
+    if(this.terminal) this.terminal.init();
+    if(this.radar) this.radar.init();
+    if(this.gyroscope) this.gyroscope.init();
+    if(this.mesh) this.mesh.init();
+  },
+
+  async runFaceScanBoot() {
+    App.speak("Initiating biometric verification.");
+    const scanScreen = document.getElementById('face-scan-screen');
+    const scanVideo = document.getElementById('face-scan-video');
+    scanScreen.classList.remove('hidden');
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if(scanVideo) {
+        scanVideo.srcObject = stream;
+      }
+    } catch(e) {
+      console.log('No camera for face scan, using mock');
+    }
+
+    // Simulate scanning delay
+    setTimeout(() => {
+      document.getElementById('face-scan-text').textContent = "BIOMETRIC MATCH CONFIRMED";
+      document.getElementById('face-scan-text').style.color = "var(--green)";
+      App.speak("Identity verified. Welcome back, Guardian.");
+      sessionStorage.setItem('safeher_face_verified', 'true');
+      
+      setTimeout(() => {
+        // Stop camera
+        if(scanVideo && scanVideo.srcObject) {
+          scanVideo.srcObject.getTracks().forEach(t => t.stop());
+        }
+        scanScreen.classList.add('hidden');
+        
+        // Resume normal boot
+        const boot = document.getElementById('boot-screen');
+        boot.classList.remove('hidden');
+        this.bootSequence();
+      }, 1500);
+    }, 4000);
+  },
+  _bootGuardianView(shareId) {
+    console.log('[GUARDIAN] Booting public view for share ID:', shareId);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-wrapper').classList.remove('hidden');
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('top-header').innerHTML = '<div style="color:var(--cyan); padding:20px; font-weight:bold; font-size:1.5rem; text-align:center; width:100%;">🛡️ SAFEHER GUARDIAN TRACKING</div>';
+    
+    // Create a fullscreen map container
+    const mapDiv = document.createElement('div');
+    mapDiv.id = 'guardian-map';
+    mapDiv.style.cssText = 'position:absolute; top:80px; left:0; right:0; bottom:0; background:#111; z-index:9999;';
+    document.getElementById('main-area').appendChild(mapDiv);
+    
+    // Init Leaflet Map
+    const map = L.map(mapDiv, {attributionControl:false}).setView([26.8467, 80.9462], 16);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+    
+    const marker = L.marker([26.8467, 80.9462], {
+      icon: L.divIcon({
+        html: '<div style="width:16px;height:16px;background:#00F5FF;border-radius:50%;box-shadow:0 0 15px #00F5FF;border:2px solid #fff"></div>',
+        iconSize: [16,16], className: ''
+      })
+    }).addTo(map);
+    
+    setTimeout(() => map.invalidateSize(), 200);
+    
+    // Subscribe to real-time updates
+    const channel = supabase.channel('share_'+shareId);
+    channel.on('broadcast', { event: 'location' }, payload => {
+      console.log('Update received:', payload.payload);
+      const pos = [payload.payload.lat, payload.payload.lng];
+      marker.setLatLng(pos);
+      map.panTo(pos);
+    }).subscribe((status) => {
+      if(status === 'SUBSCRIBED') console.log('[GUARDIAN] Connected to live tracking feed');
+    });
+  },
+  // ── AUTHENTICATION (SUPABASE) ──
+  auth: {
+    _resendTimer: null,
+    _currentPhone: null,
+    init() {
+      if (typeof supabase !== 'undefined') {
+        supabase.auth.onAuthStateChange((event, session) => {
+          if (session?.user) {
+            console.log('[AUTH] ✅ User signed in:', session.user.phone);
+            App.currentUser = session.user;
+            // Only trigger success if we aren't already logged in to prevent loop
+            if (App.currentScreen === 'dashboard' && document.getElementById('boot-screen').classList.contains('hidden')) return;
+            this._onSuccess(session.user);
+          }
+        });
+        // Check initial session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) {
+            App.currentUser = session.user;
+            this._onSuccess(session.user);
+          }
+        });
+        this._setupOTPInputs();
+      } else {
+        console.warn('[AUTH] Supabase not available — login will use skip mode');
+      }
+      const phoneInput = document.getElementById('login-phone');
+      if (phoneInput) phoneInput.addEventListener('keydown', e => { if (e.key === 'Enter') this.sendOTP(); });
+    },
+    _setupOTPInputs() {
+      document.querySelectorAll('.login-otp-digit').forEach((inp, i, all) => {
+        inp.addEventListener('input', () => {
+          inp.value = inp.value.replace(/\D/g, '');
+          if (inp.value && i < all.length - 1) all[i + 1].focus();
+          inp.classList.toggle('filled', !!inp.value);
+          const code = Array.from(all).map(d => d.value).join('');
+          if (code.length === 6) setTimeout(() => this.verifyOTP(), 200);
+        });
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Backspace' && !inp.value && i > 0) all[i - 1].focus();
+        });
+      });
+    },
+    _setStatus(msg, type) {
+      const el = document.getElementById('login-status');
+      if (el) { el.textContent = msg; el.className = 'login-status ' + (type || ''); }
+    },
+    async sendOTP() {
+      const phone = document.getElementById('login-phone')?.value.replace(/\D/g, '');
+      if (!phone || phone.length !== 10) { this._setStatus('Enter a valid 10-digit number', 'error'); return; }
+      this._currentPhone = '+91' + phone;
+      const btn = document.getElementById('login-send-otp');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="login-spinner"></span>SENDING...'; }
+      this._setStatus('Sending OTP via Supabase...');
+      try {
+        if (typeof supabase === 'undefined') throw new Error('Supabase not initialized');
+        const { error } = await supabase.auth.signInWithOtp({ phone: this._currentPhone });
+        if (error) throw error;
+        document.getElementById('login-phone-phase')?.classList.add('hidden');
+        document.getElementById('login-otp-phase')?.classList.remove('hidden');
+        this._setStatus('OTP sent to ' + this._currentPhone, 'success');
+        document.querySelector('.login-otp-digit')?.focus();
+        this._startResendTimer();
+      } catch (e) {
+        console.error('[AUTH] OTP error:', e);
+        this._setStatus(e.message || 'Failed to send OTP', 'error');
+      }
+      if (btn) { btn.disabled = false; btn.innerHTML = 'SEND OTP'; }
+    },
+    async verifyOTP() {
+      const digits = document.querySelectorAll('.login-otp-digit');
+      const code = Array.from(digits).map(d => d.value).join('');
+      if (code.length !== 6) { this._setStatus('Enter all 6 digits', 'error'); return; }
+      const btn = document.getElementById('login-verify-otp');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="login-spinner"></span>VERIFYING...'; }
+      this._setStatus('Verifying...');
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({ phone: this._currentPhone, token: code, type: 'sms' });
+        if (error) throw error;
+        App.currentUser = data.user;
+        this._setStatus('ACCESS GRANTED ✓', 'success');
+        setTimeout(() => this._onSuccess(data.user), 600);
+      } catch (e) {
+        console.error('[AUTH] Verify error:', e);
+        this._setStatus('Invalid OTP — try again', 'error');
+        digits.forEach(d => { d.value = ''; d.classList.remove('filled'); });
+        digits[0]?.focus();
+      }
+      if (btn) { btn.disabled = false; btn.innerHTML = 'VERIFY & ENTER'; }
+    },
+    _startResendTimer() {
+      let sec = 30;
+      const el = document.getElementById('login-timer');
+      if (this._resendTimer) clearInterval(this._resendTimer);
+      this._resendTimer = setInterval(() => {
+        sec--;
+        if (el) el.textContent = sec > 0 ? `Resend OTP in ${sec}s` : '';
+        if (sec <= 0) {
+          clearInterval(this._resendTimer);
+          if (el) el.innerHTML = '<a class="login-skip" onclick="App.auth._backToPhone()">← Change number</a>';
+        }
+      }, 1000);
+    },
+    _backToPhone() {
+      document.getElementById('login-phone-phase')?.classList.remove('hidden');
+      document.getElementById('login-otp-phase')?.classList.add('hidden');
+      this._setStatus('');
+    },
+    skipLogin() {
+      console.log('[AUTH] Skipping login — offline mode');
+      this._setStatus('Entering offline mode...', 'success');
+      App.currentUser = null;
+      setTimeout(() => this._hideLoginAndBoot(), 500);
+    },
+    _onSuccess(user) {
+      const avatar = document.querySelector('.user-avatar span');
+      if (avatar) avatar.textContent = user.phone || 'User';
+      App.db.loadUserData(user.id);
+      this._hideLoginAndBoot();
+    },
+    _hideLoginAndBoot() {
+      const login = document.getElementById('login-screen');
+      if (login && login.style.display !== 'none') { 
+        login.style.opacity = '0'; 
+        setTimeout(() => { login.style.display = 'none'; }, 800); 
+      }
+      const boot = document.getElementById('boot-screen');
+      if (boot && boot.classList.contains('hidden')) {
+        boot.classList.remove('hidden');
+        App.bootSequence();
+      }
+    },
+    logout() {
+      if (typeof supabase !== 'undefined') supabase.auth.signOut();
+      App.currentUser = null;
+      localStorage.removeItem('safeher_contacts');
+      localStorage.removeItem('safeher_keywords');
+      location.reload();
+    }
+  },
+
+  // ── SUPABASE DATA LAYER ──
+  db: {
+    async loadUserData(uid) {
+      if (typeof supabase === 'undefined' || !uid) return;
+      try {
+        // Create profile if doesn't exist (handled by DB trigger usually, but we ensure here)
+        const { data: prof, error: profErr } = await supabase.from('profiles').select('*').eq('id', uid).single();
+        if (profErr || !prof) {
+          await supabase.from('profiles').insert([{ id: uid, phone: App.currentUser?.phone || '' }]);
+        }
+        // Load contacts
+        const { data: contacts } = await supabase.from('contacts').select('*').eq('user_id', uid);
+        if (contacts && contacts.length) {
+          App.settings.contacts = contacts;
+          localStorage.setItem('safeher_contacts', JSON.stringify(contacts));
+          console.log('[SUPABASE] Loaded', contacts.length, 'contacts');
+        }
+        // Load keywords
+        const { data: keywords } = await supabase.from('keywords').select('*').eq('user_id', uid);
+        if (keywords && keywords.length) {
+          const kwArr = keywords.map(k => k.word);
+          App.settings.keywords = kwArr;
+          localStorage.setItem('safeher_keywords', JSON.stringify(kwArr));
+          App.voice._syncKeywordsFromSettings();
+          console.log('[SUPABASE] Loaded', keywords.length, 'keywords');
+        }
+      } catch (e) { console.error('[SUPABASE] Load error:', e); }
+    },
+    async saveContacts(contacts) {
+      const uid = App.currentUser?.id;
+      if (typeof supabase === 'undefined' || !uid) return;
+      try {
+        await supabase.from('contacts').delete().eq('user_id', uid);
+        if (contacts.length) {
+          const inserts = contacts.map(c => ({ user_id: uid, name: c.name, phone: c.phone, relation: c.relation || '', ready: true }));
+          await supabase.from('contacts').insert(inserts);
+        }
+      } catch (e) { console.error('[SUPABASE] Save contacts error:', e); }
+    },
+    async saveKeywords(keywords) {
+      const uid = App.currentUser?.id;
+      if (typeof supabase === 'undefined' || !uid) return;
+      try {
+        await supabase.from('keywords').delete().eq('user_id', uid);
+        if (keywords.length) {
+          const inserts = keywords.map(k => ({ user_id: uid, word: k, language: /[\u0900-\u097F]/.test(k) ? 'hi' : 'en' }));
+          await supabase.from('keywords').insert(inserts);
+        }
+      } catch (e) { console.error('[SUPABASE] Save keywords error:', e); }
+    },
+    async saveIncident(incident) {
+      const uid = App.currentUser?.id;
+      if (typeof supabase === 'undefined') return;
+      try {
+        await supabase.from('incidents').insert([{ 
+          user_id: uid || null, 
+          type: incident.type, 
+          location: incident.location, 
+          description: incident.description, 
+          anonymous: incident.anonymous, 
+          hash: incident.hash 
+        }]);
+      } catch (e) { console.error('[SUPABASE] Save incident error:', e); }
+    },
+    async saveEvidenceMeta(meta) {
+      const uid = App.currentUser?.id;
+      if (typeof supabase === 'undefined' || !uid) return;
+      try {
+        await supabase.from('evidence').insert([{
+          user_id: uid,
+          type: meta.type || 'unknown',
+          filename: meta.name || 'file',
+          hash: meta.hash
+        }]);
+      } catch (e) { console.error('[SUPABASE] Save evidence error:', e); }
+    }
   },
 
   // ── BOOT SEQUENCE ──
@@ -28,6 +340,7 @@ const App = {
         setTimeout(next, 400);
       } else {
         text.textContent = 'SAFEHER OS READY';
+        App.speak("Welcome to Safe Her OS. All systems online.");
         setTimeout(() => {
           document.getElementById('boot-screen').style.opacity = '0';
           document.getElementById('boot-screen').style.transition = 'opacity 0.8s';
@@ -69,6 +382,18 @@ const App = {
         alert(`Location shared: ${p.coords.latitude.toFixed(4)}°N, ${p.coords.longitude.toFixed(4)}°E`);
       }, () => alert('Location shared: 26.8467°N, 80.9462°E (mock)'));
     } else alert('Location shared: 26.8467°N, 80.9462°E (mock)');
+  },
+  
+  speak(text) {
+    if(!window.speechSynthesis) return;
+    const msg = new SpeechSynthesisUtterance(text);
+    // Find a female voice if possible
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Google UK English Female') || v.name.includes('Zira'));
+    if(femaleVoice) msg.voice = femaleVoice;
+    msg.pitch = 1.1;
+    msg.rate = 1.0;
+    window.speechSynthesis.speak(msg);
   },
 
   // ── PARTICLES ──
@@ -117,6 +442,8 @@ const App = {
       if(id==='evidence') App.vault.render();
       if(id==='settings') App.settings.render();
       if(id==='report') document.getElementById('report-time').value = new Date().toLocaleString('en-IN');
+      if(id==='community') App.community.loadPins();
+      if(id==='escort') App.escort.loadTrips();
       if(window.innerWidth<=900) document.getElementById('sidebar').classList.remove('open');
     }
   },
@@ -201,67 +528,266 @@ const App = {
     }
   },
 
-  // ── SAFE ROUTES ──
+  // ── SAFE ROUTES (Google Maps + Leaflet fallback) ──
   routes: {
-    map: null, heatShown: true, heatLayers:[], markerLayers:[], safeLayers:[],
+    map: null, heatShown: true, heatmapLayer: null, userMarker: null, _watchId: null,
+    _userLat: 26.8467, _userLng: 80.9462, _directionsRenderer: null,
+    // Unsafe zone data for heatmap
+    _unsafeZones: [
+      {lat:26.8281,lng:80.9213,w:3,name:'Alambagh Bus Stand'},
+      {lat:26.8350,lng:80.9100,w:2.5,name:'Aishbagh'},
+      {lat:26.8150,lng:80.9300,w:2.8,name:'Saadatganj'},
+      {lat:26.8600,lng:80.9650,w:2,name:'Vikas Nagar Edge'},
+      {lat:26.8300,lng:80.9500,w:1.8,name:'1090 Crossing Night'}
+    ],
+    _safeZones: [
+      {lat:26.8467,lng:80.9462,name:'Hazratganj CP',score:92},
+      {lat:26.8545,lng:80.9491,name:'Gomti Nagar',score:90},
+      {lat:26.8754,lng:80.9560,name:'Indira Nagar',score:87},
+      {lat:26.8690,lng:80.9420,name:'Lulu Mall',score:95},
+      {lat:26.8350,lng:80.9550,name:'Gomti Riverfront',score:85},
+      {lat:26.8500,lng:80.9200,name:'Mahanagar',score:82}
+    ],
+    _locations: [
+      [26.8467,80.9462,'Hazratganj','Main Market & CP Area','🟢 Safe',92],
+      [26.8545,80.9491,'Gomti Nagar','Residential & Commercial Hub','🟢 Safe',90],
+      [26.8754,80.9560,'Indira Nagar','Well-lit Residential','🟢 Safe',87],
+      [26.8600,80.9112,'Charbagh Railway','Station Area','🟡 Moderate',58],
+      [26.8393,80.9394,'Aminabad','Busy Market, Narrow Lanes','🟡 Moderate',64],
+      [26.8102,80.9245,'Kaiserbagh','Historical Area','🟡 Moderate',61],
+      [26.8281,80.9213,'Alambagh','Bus Terminal Area','🔴 Avoid',32],
+      [26.8350,80.9550,'Gomti Riverfront','Public Park Area','🟢 Safe',85],
+      [26.8690,80.9420,'Lulu Mall Area','Commercial Safe Zone','🟢 Safe',95],
+      [26.8200,80.8900,'Amausi Airport','Transit Zone','🟡 Moderate',70],
+      [26.8500,80.9200,'Mahanagar','Residential Colony','🟢 Safe',82],
+      [26.8300,80.9500,'1090 Chauraha','Intersection Hub','🟡 Moderate',55]
+    ],
     init() {
-      if(this.map) {this.map.invalidateSize();return;}
+      if (this.map) {
+        // Already initialized — just trigger resize
+        if (typeof google !== 'undefined' && this.map instanceof google.maps.Map) {
+          google.maps.event.trigger(this.map, 'resize');
+        } else if (this.map.invalidateSize) { this.map.invalidateSize(); }
+        return;
+      }
+      // Try Google Maps first, fall back to Leaflet
+      if (typeof google !== 'undefined' && google.maps && google.maps.Map) {
+        this._initGoogleMaps();
+      } else {
+        console.log('[ROUTES] Google Maps not available, using Leaflet fallback');
+        this._initLeafletFallback();
+      }
+      // Start real GPS tracking
+      this._startGPSTracking();
+    },
+    _initGoogleMaps() {
+      const container = document.getElementById('main-map');
+      const darkStyle = [
+        {elementType:'geometry',stylers:[{color:'#0a0a0f'}]},
+        {elementType:'labels.text.stroke',stylers:[{color:'#0a0a0f'}]},
+        {elementType:'labels.text.fill',stylers:[{color:'#606070'}]},
+        {featureType:'road',elementType:'geometry',stylers:[{color:'#1a1a2e'}]},
+        {featureType:'road',elementType:'geometry.stroke',stylers:[{color:'#2a2a3e'}]},
+        {featureType:'water',elementType:'geometry',stylers:[{color:'#0d1117'}]},
+        {featureType:'poi',elementType:'geometry',stylers:[{color:'#12121f'}]},
+        {featureType:'transit',elementType:'geometry',stylers:[{color:'#15152a'}]}
+      ];
+      this.map = new google.maps.Map(container, {
+        center: {lat: this._userLat, lng: this._userLng},
+        zoom: 14,
+        styles: darkStyle,
+        disableDefaultUI: true,
+        zoomControl: true,
+        mapTypeControl: false
+      });
+      // Pulsing user marker
+      this.userMarker = new google.maps.Marker({
+        position: {lat: this._userLat, lng: this._userLng},
+        map: this.map,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8, fillColor: '#00F5FF', fillOpacity: 1,
+          strokeColor: '#ffffff', strokeWeight: 2
+        },
+        title: 'Your Location'
+      });
+      // Location markers
+      this._locations.forEach(l => {
+        const col = l[5]>75?'#00FF88':l[5]>50?'#FFB300':'#FF003C';
+        const marker = new google.maps.Marker({
+          position:{lat:l[0],lng:l[1]}, map:this.map,
+          icon:{path:google.maps.SymbolPath.CIRCLE,scale:6,fillColor:col,fillOpacity:0.6,strokeColor:col,strokeWeight:1}
+        });
+        const info = new google.maps.InfoWindow({
+          content:`<div style="color:#e0e0e0"><b>${l[2]}</b><br>${l[3]}<br>Status: ${l[4]}<br>Safety: <b style="color:${col}">${l[5]}/100</b></div>`
+        });
+        marker.addListener('click', () => info.open(this.map, marker));
+      });
+      // Police stations
+      [[26.8480,80.9500,'Hazratganj PS'],[26.8550,80.9400,'Gautampalli PS'],[26.8300,80.9250,'Alambagh PS']].forEach(p => {
+        new google.maps.Marker({
+          position:{lat:p[0],lng:p[1]}, map:this.map,
+          icon:{url:'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><text y="18" font-size="16">🚔</text></svg>',scaledSize:new google.maps.Size(24,24)},
+          title:p[2]
+        });
+      });
+      // Heatmap layer
+      if (google.maps.visualization) {
+        const heatData = [];
+        this._unsafeZones.forEach(z => {
+          // Generate cluster of weighted points for each zone
+          for (let i = 0; i < 15; i++) {
+            heatData.push({
+              location: new google.maps.LatLng(z.lat + (Math.random()-0.5)*0.006, z.lng + (Math.random()-0.5)*0.006),
+              weight: z.w
+            });
+          }
+        });
+        this.heatmapLayer = new google.maps.visualization.HeatmapLayer({
+          data: heatData, map: this.map,
+          radius: 40, opacity: 0.6,
+          gradient: ['rgba(0,0,0,0)','rgba(255,0,60,0.2)','rgba(255,0,60,0.4)','rgba(255,0,60,0.6)','rgba(255,60,0,0.8)','rgba(255,100,0,1)']
+        });
+      }
+      // Directions renderer
+      this._directionsRenderer = new google.maps.DirectionsRenderer({
+        map: this.map,
+        suppressMarkers: true,
+        polylineOptions: {strokeColor:'#00FF88',strokeWeight:5,strokeOpacity:0.8}
+      });
+      // Route to nearest safe zone
+      this._routeToNearestSafe();
+      console.log('[ROUTES] ✅ Google Maps initialized with heatmap');
+    },
+    _initLeafletFallback() {
       try {
-        this.map = L.map('main-map',{attributionControl:false}).setView([26.8467,80.9462],14);
+        this.map = L.map('main-map',{attributionControl:false}).setView([this._userLat,this._userLng],14);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(this.map);
-        // User marker
-        L.marker([26.8467,80.9462],{icon:L.divIcon({html:'<div style="width:14px;height:14px;background:#00F5FF;border-radius:50%;box-shadow:0 0 15px #00F5FF;border:2px solid #fff"></div>',iconSize:[14,14],className:''})}).addTo(this.map).bindPopup('<b>📍 Your Location</b><br>Hazratganj, Lucknow<br><small>26.8467°N, 80.9462°E</small>');
-        // Safe Route 1: Hazratganj → Gomti Nagar
-        const sr1=L.polyline([[26.8467,80.9462],[26.8480,80.9480],[26.8500,80.9500],[26.8520,80.9510],[26.8545,80.9491]],{color:'#00FF88',weight:5,opacity:.8}).addTo(this.map).bindPopup('<b>Route 1: Hazratganj → Gomti Nagar</b><br>Safety: <span style="color:#0f0">92/100</span><br>Distance: 2.1 km | Time: ~8 min');
-        // Safe Route 2: Hazratganj → Indira Nagar
-        const sr2=L.polyline([[26.8467,80.9462],[26.8510,80.9470],[26.8570,80.9480],[26.8620,80.9510],[26.8680,80.9540],[26.8754,80.9560]],{color:'#00FF88',weight:4,opacity:.6}).addTo(this.map).bindPopup('<b>Route 2: Hazratganj → Indira Nagar</b><br>Safety: <span style="color:#0f0">87/100</span><br>Distance: 4.3 km | Time: ~15 min');
-        // Moderate Route: via Aminabad
-        L.polyline([[26.8467,80.9462],[26.8440,80.9430],[26.8410,80.9400],[26.8393,80.9394]],{color:'#FFB300',weight:3,opacity:.7,dashArray:'10,6'}).addTo(this.map).bindPopup('<b>Route 3: → Aminabad Market</b><br>Safety: <span style="color:#FFB300">64/100</span><br>⚠️ Poor lighting after 8PM');
-        // Avoid Route: via Alambagh
-        L.polyline([[26.8467,80.9462],[26.8400,80.9380],[26.8340,80.9300],[26.8281,80.9213]],{color:'#FF003C',weight:3,opacity:.5,dashArray:'5,10'}).addTo(this.map).bindPopup('<b>Route 4: → Alambagh</b><br>Safety: <span style="color:#FF003C">32/100</span><br>🚫 Multiple incidents reported');
-        this.safeLayers.push(sr1,sr2);
-        // Named location markers
-        const locs=[
-          [26.8467,80.9462,'Hazratganj','Main Market & CP Area','🟢 Safe',92],
-          [26.8545,80.9491,'Gomti Nagar','Residential & Commercial Hub','🟢 Safe',90],
-          [26.8754,80.9560,'Indira Nagar','Well-lit Residential','🟢 Safe',87],
-          [26.8600,80.9112,'Charbagh Railway','Station Area','🟡 Moderate',58],
-          [26.8393,80.9394,'Aminabad','Busy Market, Narrow Lanes','🟡 Moderate',64],
-          [26.8102,80.9245,'Kaiserbagh','Historical Area','🟡 Moderate',61],
-          [26.8281,80.9213,'Alambagh','Bus Terminal Area','🔴 Avoid',32],
-          [26.8350,80.9550,'Gomti Riverfront','Public Park Area','🟢 Safe',85],
-          [26.8690,80.9420,'Lulu Mall Area','Commercial Safe Zone','🟢 Safe',95],
-          [26.8200,80.8900,'Amausi Airport','Transit Zone','🟡 Moderate',70],
-          [26.8500,80.9200,'Mahanagar','Residential Colony','🟢 Safe',82],
-          [26.8300,80.9500,'1090 Chauraha','Intersection Hub','🟡 Moderate',55]
-        ];
-        locs.forEach(l=>{
+        this.userMarker = L.marker([this._userLat,this._userLng],{icon:L.divIcon({html:'<div style="width:14px;height:14px;background:#00F5FF;border-radius:50%;box-shadow:0 0 15px #00F5FF;border:2px solid #fff"></div>',iconSize:[14,14],className:''})}).addTo(this.map);
+        this._locations.forEach(l=>{
           const col=l[5]>75?'#00FF88':l[5]>50?'#FFB300':'#FF003C';
-          const m=L.circleMarker([l[0],l[1]],{radius:7,color:col,fillColor:col,fillOpacity:.4,weight:2}).addTo(this.map);
-          m.bindPopup(`<b>${l[2]}</b><br>${l[3]}<br>Status: ${l[4]}<br>Safety Score: <b style="color:${col}">${l[5]}/100</b>`);
-          this.markerLayers.push(m);
+          L.circleMarker([l[0],l[1]],{radius:7,color:col,fillColor:col,fillOpacity:.4,weight:2}).addTo(this.map).bindPopup(`<b>${l[2]}</b><br>${l[3]}<br>Safety: <b style="color:${col}">${l[5]}/100</b>`);
         });
-        // Danger heatmap zones
-        const zones=[[26.8281,80.9213,500,'Alambagh Bus Stand'],[26.8350,80.9100,350,'Aishbagh'],[26.8150,80.9300,400,'Saadatganj'],[26.8600,80.9650,300,'Vikas Nagar Edge'],[26.8300,80.9500,250,'1090 Crossing Night']];
-        zones.forEach(z=>{
-          const c=L.circle([z[0],z[1]],{radius:z[2],color:'#FF003C',fillColor:'#FF003C',fillOpacity:.12,weight:1}).addTo(this.map);
-          c.bindPopup(`<b>⚠️ Unsafe Zone</b><br>${z[3]}<br><small>Multiple incidents reported</small>`);
-          this.heatLayers.push(c);
+        // Danger zones
+        this._unsafeZones.forEach(z=>{
+          L.circle([z.lat,z.lng],{radius:z.w*150,color:'#FF003C',fillColor:'#FF003C',fillOpacity:.12,weight:1}).addTo(this.map);
         });
-        // Police stations
-        const police=[[26.8480,80.9500,'Hazratganj PS'],[26.8550,80.9400,'Gautampalli PS'],[26.8300,80.9250,'Alambagh PS']];
-        police.forEach(p=>{
-          L.marker([p[0],p[1]],{icon:L.divIcon({html:'<div style="font-size:16px">🚔</div>',iconSize:[16,16],className:''})}).addTo(this.map).bindPopup(`<b>${p[2]}</b><br>Police Station<br>Dial: 100`);
-        });
+        // Safe routes
+        L.polyline([[26.8467,80.9462],[26.8480,80.9480],[26.8500,80.9500],[26.8520,80.9510],[26.8545,80.9491]],{color:'#00FF88',weight:5,opacity:.8}).addTo(this.map);
+        L.polyline([[26.8467,80.9462],[26.8510,80.9470],[26.8570,80.9480],[26.8620,80.9510],[26.8680,80.9540],[26.8754,80.9560]],{color:'#00FF88',weight:4,opacity:.6}).addTo(this.map);
         setTimeout(()=>this.map.invalidateSize(),200);
       } catch(e){}
     },
+    _startGPSTracking() {
+      if (!navigator.geolocation) return;
+      this._watchId = navigator.geolocation.watchPosition(pos => {
+        this._userLat = pos.coords.latitude;
+        this._userLng = pos.coords.longitude;
+        // Update GPS display in right panel
+        const latEl = document.getElementById('gps-lat');
+        const lngEl = document.getElementById('gps-lng');
+        if (latEl) latEl.textContent = this._userLat.toFixed(4) + '° N';
+        if (lngEl) lngEl.textContent = this._userLng.toFixed(4) + '° E';
+        // Update marker position
+        if (this.userMarker) {
+          if (this.userMarker.setPosition) this.userMarker.setPosition({lat: this._userLat, lng: this._userLng}); // Google
+          else if (this.userMarker.setLatLng) this.userMarker.setLatLng([this._userLat, this._userLng]); // Leaflet
+        }
+      }, err => {
+        console.log('[ROUTES] GPS error:', err.message);
+      }, {enableHighAccuracy: true, maximumAge: 10000, timeout: 15000});
+    },
+    _routeToNearestSafe() {
+      if (!google?.maps?.DirectionsService) return;
+      // Find nearest safe zone
+      let nearest = this._safeZones[0], minDist = Infinity;
+      this._safeZones.forEach(z => {
+        const d = Math.sqrt(Math.pow(z.lat - this._userLat, 2) + Math.pow(z.lng - this._userLng, 2));
+        if (d > 0.001 && d < minDist) { minDist = d; nearest = z; }
+      });
+      const service = new google.maps.DirectionsService();
+      service.route({
+        origin: {lat: this._userLat, lng: this._userLng},
+        destination: {lat: nearest.lat, lng: nearest.lng},
+        travelMode: google.maps.TravelMode.WALKING
+      }, (result, status) => {
+        if (status === 'OK' && this._directionsRenderer) {
+          this._directionsRenderer.setDirections(result);
+          // Update route info panel
+          const leg = result.routes[0].legs[0];
+          const distEl = document.querySelector('#route-info .rv');
+          const timeEl = document.querySelectorAll('#route-info .rv')[2];
+          if (distEl) distEl.textContent = leg.distance.text;
+          if (timeEl) timeEl.textContent = leg.duration.text;
+          console.log('[ROUTES] Directions to', nearest.name, ':', leg.distance.text);
+        }
+      });
+    },
     toggleHeatmap(btn) {
       btn.classList.toggle('active');
-      this.heatShown=!this.heatShown;
-      this.heatLayers.forEach(l=> this.heatShown? l.addTo(this.map): this.map.removeLayer(l));
+      this.heatShown = !this.heatShown;
+      if (this.heatmapLayer) {
+        this.heatmapLayer.setMap(this.heatShown ? this.map : null);
+      }
     },
-    toggleSafeOnly(btn) { btn.classList.toggle('active'); }
+    toggleSafeOnly(btn) { btn.classList.toggle('active'); },
+    
+    _demoPolylines: [],
+    demoRoute(destination) {
+      if(!this.map) return;
+      
+      // Clear previous routes
+      this._demoPolylines.forEach(p => this.map.removeLayer(p));
+      this._demoPolylines = [];
+      
+      // Generate a random destination roughly 2-8 km away
+      const distKm = (Math.random() * 6 + 2).toFixed(1);
+      const safeScore = Math.floor(Math.random() * 15) + 80; // 80-94
+      const timeMin = Math.floor(distKm * 4.5); // avg 4.5 mins per km
+      const warnings = Math.floor(Math.random() * 3);
+      
+      // Update DOM info
+      const routeVals = document.querySelectorAll('#route-info .rv');
+      if(routeVals.length >= 4) {
+        routeVals[0].textContent = `${distKm} km`;
+        routeVals[1].textContent = `${safeScore}/100`;
+        routeVals[1].className = `rv safety-${safeScore > 85 ? 'high' : 'low'}`;
+        routeVals[2].textContent = `${timeMin} min`;
+        routeVals[3].textContent = warnings;
+        routeVals[3].className = `rv safety-${warnings === 0 ? 'high' : 'low'}`;
+      }
+      
+      // Generate a fake route path (5-8 points) starting from user
+      const latStart = this._userLat || 26.8467;
+      const lngStart = this._userLng || 80.9462;
+      const points = [[latStart, lngStart]];
+      
+      let curLat = latStart;
+      let curLng = lngStart;
+      
+      const numPoints = Math.floor(Math.random() * 4) + 4;
+      for(let i=0; i<numPoints; i++) {
+        // move vaguely northeast or northwest
+        curLat += (Math.random() * 0.01) + 0.005;
+        curLng += (Math.random() - 0.5) * 0.02;
+        points.push([curLat, curLng]);
+      }
+      
+      // Draw the main safe route
+      const mainRoute = L.polyline(points, {color:'#00FF88', weight:5, opacity:0.8, dashArray: '10, 10'}).addTo(this.map);
+      this._demoPolylines.push(mainRoute);
+      
+      // Draw a destination marker
+      const destIcon = L.divIcon({html:'<div style="font-size:1.5rem;">📍</div>', className:'', iconSize:[24,24], iconAnchor:[12,24]});
+      const destMarker = L.marker([curLat, curLng], {icon: destIcon}).addTo(this.map).bindPopup(`<b>${destination}</b><br>Arriving in ${timeMin} mins`);
+      this._demoPolylines.push(destMarker);
+      
+      // Fit bounds
+      this.map.fitBounds(mainRoute.getBounds(), {padding: [50, 50]});
+      destMarker.openPopup();
+      
+      console.log(`[ROUTES] Generated route to ${destination}: ${distKm}km, Safety: ${safeScore}`);
+    }
   },
 
   // ── SOS ──
@@ -310,7 +836,10 @@ const App = {
       setTimeout(() => document.body.classList.remove('sos-flash'), 500);
       if(navigator.vibrate) navigator.vibrate([200,100,200,100,200]);
       document.getElementById('sos-abort').classList.remove('hidden');
+      App.speak("Emergency protocol activated. Sending location and audio-visual evidence to your guardians.");
       this.startEvidenceCapture();
+      // ── REAL SMS ALERT ──
+      this._sendRealSOS();
       const phases = document.querySelectorAll('#sos-phases .phase');
       const contacts = document.querySelectorAll('#sos-contacts .contact-status');
       let step = 0;
@@ -350,9 +879,70 @@ const App = {
       };
       run();
     },
+    // ── REAL SMS DISPATCH ──
+    async _sendRealSOS() {
+      try {
+        // Get real GPS if available
+        let lat = 26.8467, lng = 80.9462;
+        try {
+          const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout:5000}));
+          lat = pos.coords.latitude; lng = pos.coords.longitude;
+        } catch(e) { console.log('[SOS] GPS fallback to default coords'); }
+        const contacts = App.settings.contacts.filter(c => c.phone);
+        const payload = {
+          userName: App.currentUser?.phoneNumber || 'SafeHer User',
+          userPhone: App.currentUser?.phoneNumber || '',
+          contacts: contacts,
+          location: { lat, lng },
+          timestamp: new Date().toLocaleString('en-IN', {timeZone:'Asia/Kolkata'})
+        };
+        console.log('[SOS] 📡 Sending real SMS to', contacts.length, 'contacts...');
+        const resp = await fetch('/api/send-sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        console.log('[SOS] SMS result:', result);
+        if (result.success) {
+          this._logEvidence('📡 Real SMS sent to ' + result.sent.filter(s=>s.status==='sent').length + ' contacts');
+        }
+      } catch (e) {
+        console.warn('[SOS] SMS API not available (expected in dev):', e.message);
+        this._logEvidence('⚠️ SMS API unavailable — contacts notified locally');
+      }
+    },
+    _startStealthMic() {
+      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio:true, video:false })
+          .then(stream => {
+            console.log('[DECOY] Stealth mic active');
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = async e => {
+              if(e.data.size > 0 && App.currentUser) {
+                // Upload to Supabase Storage if configured, or just mock it for hackathon
+                console.log('[DECOY] Audio chunk captured secretly');
+                App.db.saveEvidenceMeta({ name: `Stealth_Audio_${Date.now()}.webm`, type: 'audio', hash: 'stealth_'+Date.now() });
+              }
+            };
+            mediaRecorder.start(10000); // 10 sec chunks
+            this.mediaRecorder = mediaRecorder;
+            this.stream = stream;
+          }).catch(e=>console.log('[DECOY] Stealth mic failed:', e));
+      }
+    },
     // Auto voice + camera recording with live preview
     _evidenceFileCount:0, _evidenceDB:null,
     async _initEvidenceDB() {
+      if(this._evidenceDB) return this._evidenceDB;
+      return new Promise((resolve,reject) => {
+        const req = indexedDB.open('SafeHerEvidence', 1);
+        req.onupgradeneeded = e => { const db = e.target.result; if(!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs'); };
+        req.onsuccess = e => { this._evidenceDB = e.target.result; resolve(this._evidenceDB); };
+        req.onerror = e => reject(e);
+      });
+    },
+    async _startAutoEvidence() {
       if(this._evidenceDB) return this._evidenceDB;
       return new Promise((resolve,reject) => {
         const req = indexedDB.open('SafeHerEvidence', 1);
@@ -611,7 +1201,11 @@ const App = {
       // Reset voice cooldown so it can trigger again
       App.voice._sosCooldown = false;
     },
-    startFakeCall() {
+    _isAICall: false,
+    startFakeCall(callerName = 'Mom', isAICall = false) {
+      this._isAICall = isAICall;
+      const nameEl = document.querySelector('.fake-call-name');
+      if(nameEl) nameEl.textContent = callerName;
       document.getElementById('fake-call-overlay').classList.remove('hidden');
       try{
         const ctx=new(window.AudioContext||window.webkitAudioContext)();
@@ -624,10 +1218,17 @@ const App = {
     acceptFakeCall() {
       document.getElementById('fake-call-overlay').classList.add('hidden');
       try{this._fakeRing.o.stop();}catch(e){}
+      if(this._isAICall) {
+        setTimeout(() => {
+          App.speak("Hello. My predictive models indicate you have entered a high-risk area. I am actively monitoring your location. Please press SOS if you need immediate assistance.");
+          this._isAICall = false;
+        }, 500);
+      }
     },
     declineFakeCall() {
       document.getElementById('fake-call-overlay').classList.add('hidden');
       try{this._fakeRing.o.stop();}catch(e){}
+      this._isAICall = false;
     },
     toggleAlarm() {
       if(this.alarmOsc){try{this.alarmOsc.stop();}catch(e){}this.alarmOsc=null;return;}
@@ -893,6 +1494,9 @@ const App = {
       const reports=JSON.parse(localStorage.getItem('safeher_reports')||'[]');
       reports.push({type:document.getElementById('report-type').value,location:document.getElementById('report-location').value,desc:document.getElementById('report-desc').value,time:new Date().toISOString(),hash});
       localStorage.setItem('safeher_reports',JSON.stringify(reports));
+      // Sync to Firestore
+      const incident={type:document.getElementById('report-type').value,location:document.getElementById('report-location').value,description:document.getElementById('report-desc').value,anonymous:true,hash};
+      App.firestore.saveIncident(incident);
       setTimeout(()=>{form.classList.remove('hidden');success.classList.add('hidden');form.reset();document.getElementById('report-location').value='Hazratganj, Lucknow';},4000);
     },
     handleFile(input) {
@@ -989,10 +1593,467 @@ const App = {
     addKeyword(){const inp=document.getElementById('new-keyword');const v=inp.value.trim();if(v){this.keywords.push(v);inp.value='';this.save();this.render();this._syncVoiceKeywords();}},
     // Push updated keywords to the live voice engine immediately
     _syncVoiceKeywords(){App.voice.keywords=this.keywords.map(k=>k.toLowerCase().trim()).filter(k=>k.length>0);console.log('[SETTINGS] Keywords synced to voice engine:', App.voice.keywords.join(', '));},
-    save(){localStorage.setItem('safeher_contacts',JSON.stringify(this.contacts));localStorage.setItem('safeher_keywords',JSON.stringify(this.keywords));}
+    save(){localStorage.setItem('safeher_contacts',JSON.stringify(this.contacts));localStorage.setItem('safeher_keywords',JSON.stringify(this.keywords));if(App.db){App.db.saveContacts(this.contacts);App.db.saveKeywords(this.keywords);}}
   },
 
-  // ── 3D TILT ──
+  // ── LIVE SHARE ──
+  liveShare: {
+    _channel: null, _interval: null, activeId: null, _viewerTimer: null,
+    start() {
+      const hrs = parseInt(document.getElementById('share-duration').value);
+      this.activeId = 'share_' + Math.random().toString(36).substring(2,10);
+      const expiry = new Date(Date.now() + hrs * 3600000).toISOString();
+      const lat = App.routes._userLat || 26.8467;
+      const lng = App.routes._userLng || 80.9462;
+      
+      const proceed = (id) => {
+        this.activeId = id;
+        const link = window.location.origin + window.location.pathname + '?share=' + this.activeId;
+        document.getElementById('share-link-input').value = link;
+        document.getElementById('share-active-panel').classList.remove('hidden');
+        document.getElementById('start-share-btn').disabled = true;
+        
+        // Start broadcast
+        try {
+          if(typeof supabase !== 'undefined') {
+            this._channel = supabase.channel('share_'+this.activeId);
+            this._channel.subscribe();
+          }
+        }catch(e){}
+        
+        this._interval = setInterval(() => {
+          const curl = App.routes._userLat; const clng = App.routes._userLng;
+          try {
+            if(typeof supabase !== 'undefined') {
+              supabase.from('live_shares').update({lat:curl, lng:clng}).eq('id', this.activeId).then();
+              if(this._channel) this._channel.send({type:'broadcast', event:'location', payload:{lat:curl, lng:clng}});
+            }
+          }catch(e){}
+        }, 5000);
+        
+        // Start Demo Viewers
+        this.simulateViewers();
+      };
+
+      try {
+        if(typeof supabase !== 'undefined' && App.currentUser) {
+          supabase.from('live_shares').insert([{
+            id: '00000000-0000-0000-0000-000000000000'.replace(/0/g, ()=>Math.floor(Math.random()*16).toString(16)),
+            user_id: App.currentUser.id, lat, lng, expires_at: expiry, active: true
+          }]).select().then(({data, error}) => {
+            if(!error && data) proceed(data[0].id); else proceed(this.activeId);
+          }).catch(()=>proceed(this.activeId));
+        } else {
+          proceed(this.activeId);
+        }
+      } catch(e) { proceed(this.activeId); }
+    },
+    simulateViewers() {
+      const vList = document.getElementById('viewer-list');
+      const countLabel = document.querySelector('#live-viewer-feed div:first-child');
+      if(!vList || !countLabel) return;
+      vList.innerHTML = ''; countLabel.innerHTML = '👁️ ACTIVE VIEWERS (0)';
+      
+      const names = ['Priya', 'Mom', 'Dad', 'Safety Control Room', 'Brother'];
+      let viewers = [];
+      let nextJoin = 3000;
+      
+      const addViewer = () => {
+        if(viewers.length >= 3 || !this.activeId) return;
+        const name = names[Math.floor(Math.random() * names.length)];
+        if(!viewers.includes(name)) {
+          viewers.push(name);
+          countLabel.innerHTML = `👁️ ACTIVE VIEWERS (${viewers.length})`;
+          vList.innerHTML = `<div style="padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#fff;">✅ <b>${name}</b> has connected <span style="font-size:0.7rem; color:var(--green); float:right;">Live</span></div>` + vList.innerHTML;
+        }
+        if(viewers.length < 3) this._viewerTimer = setTimeout(addViewer, Math.random() * 8000 + 4000);
+      };
+      this._viewerTimer = setTimeout(addViewer, nextJoin);
+    },
+    stop() {
+      if(this._interval) clearInterval(this._interval);
+      if(this._viewerTimer) clearTimeout(this._viewerTimer);
+      if(this._channel) supabase.removeChannel(this._channel);
+      if(this.activeId && typeof supabase !== 'undefined') supabase.from('live_shares').update({active: false}).eq('id', this.activeId).then().catch(e=>{});
+      this.activeId = null;
+      document.getElementById('share-active-panel').classList.add('hidden');
+      document.getElementById('start-share-btn').disabled = false;
+      this.loadHistory(); // refresh history
+    },
+    loadHistory() {
+      const listEl = document.getElementById('liveshare-recent');
+      if(!listEl) return;
+      
+      // Generate 10 dummy past share sessions
+      const sessions = [];
+      for(let i = 1; i <= 10; i++) {
+        const h = Math.floor(Math.random() * 12) + 1;
+        sessions.push({
+          link: window.location.origin + window.location.pathname + '?share=' + Math.random().toString(36).substring(2,10),
+          time: new Date(Date.now() - 86400000 * (i * 1.5)).toLocaleString('en-IN'),
+          duration: `${h} Hour${h>1?'s':''}`
+        });
+      }
+      
+      listEl.innerHTML = '';
+      sessions.forEach(s => {
+        listEl.innerHTML += `
+          <div style="background:rgba(255,255,255,0.05); padding:15px; border-left: 3px solid var(--dim); border-radius:4px; font-size:0.9rem;">
+            <div style="color:var(--cyan); font-family:var(--font-h); font-size:0.7rem; margin-bottom:5px;">${s.link}</div>
+            <div style="color:var(--dim); font-size:0.8rem; margin-bottom:5px;">Duration: ${s.duration}</div>
+            <div style="font-size:0.75rem; color:#666;">${s.time}</div>
+          </div>
+        `;
+      });
+    },
+    copyLink() {
+      const inp = document.getElementById('share-link-input');
+      inp.select(); document.execCommand('copy');
+      alert('Link copied to clipboard!');
+    },
+    shareWhatsApp() {
+      const link = document.getElementById('share-link-input').value;
+      window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent('Track my live location on SafeHer OS: ' + link), '_blank');
+    }
+  },
+
+  // ── ESCORT MODE ──
+  escort: {
+    active: false, _interval: null, dest: null, lastLoc: null, stationaryTicks: 0,
+    start() {
+      const destName = document.getElementById('escort-dest').value;
+      const level = document.getElementById('escort-level')?.value || 'standard';
+      if(!destName) return alert('Enter destination');
+      this.dest = destName;
+      this.active = true;
+      document.getElementById('escort-active-panel').classList.remove('hidden');
+      document.getElementById('start-escort-btn').disabled = true;
+      this.lastLoc = { lat: App.routes._userLat, lng: App.routes._userLng };
+      this.stationaryTicks = 0;
+      
+      let maxTicks = 10; // 5 mins
+      if(level === 'elevated') maxTicks = 4; // 2 mins
+      if(level === 'maximum') {
+        maxTicks = 2; // 1 min
+        App.sos._startStealthMic(); // Arm mic immediately
+      }
+      
+      // Notify guardian via SMS API
+      if(App.currentUser) {
+        const contacts = App.settings.contacts.filter(c => c.phone);
+        fetch('/api/send-sos', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            userName: App.currentUser.phone, contacts, location: this.lastLoc,
+            message: `🚶 Escort Mode Started. Dest: ${destName}. Level: ${level.toUpperCase()}.`
+          })
+        }).catch(e=>console.log('Escort start SMS skipped locally'));
+      }
+      
+      // Background monitor
+      this._interval = setInterval(() => {
+        const cur = { lat: App.routes._userLat, lng: App.routes._userLng };
+        const dist = Math.sqrt(Math.pow(cur.lat - this.lastLoc.lat, 2) + Math.pow(cur.lng - this.lastLoc.lng, 2));
+        if(dist < 0.0001) { // ~10 meters
+          this.stationaryTicks++;
+          if(this.stationaryTicks >= maxTicks) { 
+            const mins = maxTicks / 2;
+            document.getElementById('escort-status-text').textContent = `⚠️ Stopped for ${mins}+ mins`;
+            document.getElementById('escort-status-text').style.color = 'var(--amber)';
+            this._triggerEscortAlert(`Stationary for > ${mins} minutes`);
+            this.stationaryTicks = 0; // reset to avoid spam
+          }
+        } else {
+          this.stationaryTicks = 0;
+          document.getElementById('escort-status-text').textContent = 'On Route';
+          document.getElementById('escort-status-text').style.color = 'var(--green)';
+        }
+        this.lastLoc = cur;
+      }, 30000);
+    },
+    _triggerEscortAlert(reason) {
+      console.warn('[ESCORT] Alert triggered:', reason);
+      // Auto-fire SOS
+      App.sos.activate();
+    },
+    arriveSafe() {
+      const pinInput = document.getElementById('escort-end-pin');
+      if(pinInput && pinInput.value !== '1234') {
+        alert('SECURITY ALERT: Invalid PIN entered! SOS Triggered silently.');
+        this._triggerEscortAlert('Forced trip termination with invalid PIN');
+        pinInput.value = '';
+        return;
+      }
+      if(pinInput) pinInput.value = ''; // clear on success
+      
+      this.active = false;
+      clearInterval(this._interval);
+      document.getElementById('escort-active-panel').classList.add('hidden');
+      document.getElementById('start-escort-btn').disabled = false;
+      alert('Trip ended safely.');
+      if(App.currentUser) {
+        fetch('/api/send-sos', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            userName: App.currentUser.phone, contacts: App.settings.contacts.filter(c=>c.phone),
+            location: {lat:App.routes._userLat, lng:App.routes._userLng},
+            message: `✅ Arrived safely at destination.`
+          })
+        }).catch(e=>{});
+      }
+      this.loadTrips(); // Refresh the list
+    },
+    loadTrips() {
+      const listEl = document.getElementById('escort-recent-trips');
+      if(!listEl) return;
+      
+      // Generate 20 dummy recent trips for the demo
+      const destinations = [
+        'Phoenix Palassio, Gomti Nagar', 'Charbagh Railway Station', 'Aminabad Market', 
+        'Hazratganj Main Chauraha', 'Lulu Mall', 'Indira Nagar Metro Station', 
+        'Chowk Area', 'Alambagh Bus Stand', 'Gomti Riverfront', 'Bhootnath Market'
+      ];
+      const statuses = ['Arrived Safely', 'Arrived Safely', 'Arrived Safely', 'Arrived Safely', 'SOS Triggered'];
+      
+      const trips = [];
+      for(let i = 1; i <= 20; i++) {
+        trips.push({
+          dest: destinations[Math.floor(Math.random() * destinations.length)],
+          time: new Date(Date.now() - 86400000 * (i * 0.8)).toLocaleString('en-IN'),
+          status: statuses[Math.floor(Math.random() * statuses.length)]
+        });
+      }
+      
+      listEl.innerHTML = '';
+      trips.forEach(t => {
+        const col = t.status.includes('Safely') ? 'var(--green)' : 'var(--red)';
+        const ico = t.status.includes('Safely') ? '✅' : '🚨';
+        listEl.innerHTML += `
+          <div style="background:rgba(255,255,255,0.05); padding:15px; border-left: 3px solid ${col}; border-radius:4px; font-size:0.9rem;">
+            <div style="font-weight:bold; margin-bottom:5px; color:#fff;">📍 ${t.dest}</div>
+            <div style="color:${col}; font-size:0.8rem; margin-bottom:5px;">${ico} ${t.status}</div>
+            <div style="font-size:0.75rem; color:var(--dim);">${t.time}</div>
+          </div>
+        `;
+      });
+    }
+  },
+
+  // ── GESTURE SOS ──
+  gestureSOS: {
+    active: false, _shakeCounts: 0, _lastShake: 0, _volCounts: 0, _lastVol: 0,
+    toggle(state) {
+      this.active = state;
+      if(state) {
+        window.addEventListener('devicemotion', this._handleMotion);
+        document.addEventListener('keydown', this._handleKey);
+        console.log('[GESTURE] Shake & Volume SOS enabled');
+      } else {
+        window.removeEventListener('devicemotion', this._handleMotion);
+        document.removeEventListener('keydown', this._handleKey);
+      }
+    },
+    _handleMotion: (e) => {
+      if(!App.gestureSOS.active) return;
+      const acc = e.accelerationIncludingGravity;
+      if(!acc) return;
+      const force = Math.abs(acc.x) + Math.abs(acc.y) + Math.abs(acc.z);
+      if(force > 25) { // Shake threshold
+        const now = Date.now();
+        if(now - App.gestureSOS._lastShake > 1000) App.gestureSOS._shakeCounts = 0; // reset if too slow
+        App.gestureSOS._shakeCounts++;
+        App.gestureSOS._lastShake = now;
+        if(App.gestureSOS._shakeCounts >= 4) {
+          console.log('[GESTURE] Shake SOS Triggered!');
+          App.gestureSOS._shakeCounts = 0;
+          App.sos.activate();
+        }
+      }
+    },
+    _handleKey: (e) => {
+      if(!App.gestureSOS.active) return;
+      // Many Android browsers fire AudioVolumeDown for volume keys if intercepted
+      if(e.key === 'AudioVolumeDown' || e.code === 'AudioVolumeDown') {
+        const now = Date.now();
+        if(now - App.gestureSOS._lastVol > 2000) App.gestureSOS._volCounts = 0;
+        App.gestureSOS._volCounts++;
+        App.gestureSOS._lastVol = now;
+        if(App.gestureSOS._volCounts >= 3) {
+          console.log('[GESTURE] Volume SOS Triggered!');
+          App.gestureSOS._volCounts = 0;
+          App.sos.activate();
+        }
+      }
+    }
+  },
+
+  // ── COMMUNITY MAP ──
+  community: {
+    pins: [],
+    async loadPins() {
+      let data = [];
+      try {
+        if(typeof supabase !== 'undefined') {
+          const res = await supabase.from('community_pins').select('*').order('created_at', {ascending: false}).limit(50);
+          if(!res.error) data = res.data || [];
+        }
+      } catch(e){}
+      
+      // Fallback
+      if(!data || data.length === 0) {
+        data = JSON.parse(localStorage.getItem('safeher_comm_pins') || '[]');
+        if(data.length < 50) {
+          data = []; // Reset and generate 50
+          // Generate 50 Demo Pins
+          const descs = {
+            'unsafe': ['Streetlight broken, dark alleyway.', 'Drunk men loitering at night.', 'No CCTV, isolated path.', 'Harassment reported last week.', 'Unsafe crossing after 9 PM.'],
+            'safe': ['24/7 Pharmacy with security guard.', 'Well-lit main road with police patrol.', 'Crowded market area, very safe.', 'Women-friendly cafe open till late.', 'Metro station entrance, lots of cameras.'],
+            'incident': ['Suspicious group loitering near the pillar.', 'Chain snatching attempt reported.', 'Someone followed a girl here yesterday.', 'Verbal abuse incident nearby.', 'Fake auto driver seen in this area.']
+          };
+          const types = ['unsafe', 'safe', 'incident'];
+          for(let i = 0; i < 50; i++) {
+            const t = types[Math.floor(Math.random() * types.length)];
+            const d = descs[t][Math.floor(Math.random() * descs[t].length)];
+            const lat = 26.8467 + (Math.random() - 0.5) * 0.08;
+            const lng = 80.9462 + (Math.random() - 0.5) * 0.08;
+            const time = new Date(Date.now() - Math.floor(Math.random() * 1000000000)).toISOString();
+            data.push({ type: t, description: d, lat, lng, created_at: time });
+          }
+          // Sort by newest
+          data.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+          localStorage.setItem('safeher_comm_pins', JSON.stringify(data));
+        }
+      }
+      
+      if(data && data.length) {
+        this.pins = data;
+        const listEl = document.getElementById('comm-recent-pins');
+        if(listEl) listEl.innerHTML = '';
+        
+        data.forEach(p => {
+          const col = p.type === 'unsafe' ? '#FF003C' : p.type === 'safe' ? '#00FF88' : '#FFB300';
+          const ico = p.type === 'unsafe' ? '🔴' : p.type === 'safe' ? '🟢' : '⚠️';
+          const typeStr = p.type === 'unsafe' ? 'Unsafe Zone' : p.type === 'safe' ? 'Safe Spot' : 'Incident';
+          
+          // Render in list
+          if(listEl) {
+            listEl.innerHTML += `
+              <div style="background:rgba(255,255,255,0.05); padding:15px; border-left: 3px solid ${col}; border-radius:4px; font-size:0.9rem;">
+                <div style="color:${col}; font-weight:bold; margin-bottom:5px;">${ico} ${typeStr}</div>
+                <div style="color:var(--dim);">${p.description}</div>
+                <div style="font-size:0.7rem; color:#666; margin-top:5px;">${new Date(p.created_at).toLocaleString('en-IN')}</div>
+              </div>
+            `;
+          }
+          
+          // Render on Safe Routes map if initialized
+          if(App.routes.map) {
+            if(window.google && window.google.maps) {
+              new google.maps.Marker({
+                position:{lat:p.lat,lng:p.lng}, map:App.routes.map,
+                icon:{path:google.maps.SymbolPath.CIRCLE,scale:5,fillColor:col,fillOpacity:0.8,strokeColor:'#fff',strokeWeight:1},
+                title: p.description
+              });
+            } else if (window.L) {
+              L.circleMarker([p.lat, p.lng],{radius:6,color:col,fillColor:col,fillOpacity:0.8}).addTo(App.routes.map)
+               .bindPopup(`<b>${ico} Community Pin</b><br>${p.description}`);
+            }
+          }
+        });
+      }
+    },
+    async addPin() {
+      const type = document.getElementById('comm-pin-type').value;
+      const desc = document.getElementById('comm-pin-desc').value;
+      if(!desc) return alert('Please enter a description');
+      
+      const newPin = { type, description: desc, lat: App.routes._userLat||26.8467, lng: App.routes._userLng||80.9462, created_at: new Date().toISOString() };
+      
+      let success = false;
+      try {
+        if(typeof supabase !== 'undefined') {
+          const { error } = await supabase.from('community_pins').insert([newPin]);
+          if(!error) success = true;
+        }
+      } catch(e){}
+      
+      // Fallback
+      if(!success) {
+        const localPins = JSON.parse(localStorage.getItem('safeher_comm_pins') || '[]');
+        localPins.unshift(newPin);
+        localStorage.setItem('safeher_comm_pins', JSON.stringify(localPins));
+      }
+      
+      alert('Pin dropped successfully!');
+      document.getElementById('comm-pin-desc').value = '';
+      this.loadPins();
+    }
+  },
+
+  // ── DECOY SCREEN ──
+  decoy: {
+    active: false, sequence: '', required: '789X', _interval: null,
+    activate() {
+      this.active = true;
+      document.getElementById('decoy-screen').classList.remove('hidden');
+      document.getElementById('decoy-display').textContent = '0';
+      this.sequence = '';
+      
+      // Setup fake calculator buttons
+      document.querySelectorAll('.decoy-btn').forEach(btn => {
+        // Remove old listeners by cloning
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', (e) => this._handleCalc(e.target.textContent));
+      });
+      
+      // Start stealth mic recording
+      App.sos._startStealthMic();
+      
+      // Start stealth location ping
+      this._interval = setInterval(() => {
+        if(!App.currentUser) return;
+        const contacts = App.settings.contacts.filter(c => c.phone);
+        fetch('/api/send-sos', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            userName: App.currentUser.phone, contacts, location: {lat:App.routes._userLat, lng:App.routes._userLng},
+            message: `⚠️ Stealth tracking active.`
+          })
+        }).catch(e=>{});
+      }, 30000); // every 30s
+    },
+    deactivate() {
+      this.active = false;
+      document.getElementById('decoy-screen').classList.add('hidden');
+      clearInterval(this._interval);
+      if(App.sos.mediaRecorder && App.sos.mediaRecorder.state !== 'inactive') {
+        App.sos.mediaRecorder.stop();
+      }
+    },
+    _handleCalc(val) {
+      if(val === 'C') { this.sequence = ''; document.getElementById('decoy-display').textContent = '0'; return; }
+      const display = document.getElementById('decoy-display');
+      if(display.textContent === '0') display.textContent = val;
+      else display.textContent += val;
+      
+      // Use 'X' for multiply
+      let char = val === '×' ? 'X' : val;
+      this.sequence += char;
+      
+      // Secret code to trigger SOS
+      if(this.sequence.includes('7+7+7=')) {
+        console.log('[DECOY] Panic code entered!');
+        this.deactivate();
+        App.sos.activate();
+      }
+      // Secret code to just exit decoy
+      if(this.sequence.includes('1234=')) {
+        this.deactivate();
+      }
+    }
+  },
+
   tilt: {
     init() {
       document.querySelectorAll('.tilt-card').forEach(card => {
@@ -1004,6 +2065,286 @@ const App = {
         });
         card.addEventListener('mouseleave', () => { card.style.transform=''; });
       });
+    }
+  },
+
+  // ── BIOMETRICS (Simulated Wearable) ──
+  biometrics: {
+    _interval: null, bpm: 72, stressMode: false,
+    init() {
+      this._interval = setInterval(() => {
+        if(!this.stressMode) {
+          // Normal resting heart rate fluctuation (68-85)
+          this.bpm += Math.floor(Math.random() * 5) - 2;
+          if(this.bpm < 68) this.bpm = 68;
+          if(this.bpm > 85) this.bpm = 85;
+        } else {
+          // Stress mode (120-160)
+          this.bpm += Math.floor(Math.random() * 10) - 2;
+          if(this.bpm > 160) this.bpm = 160;
+        }
+        
+        const display = document.getElementById('bpm-display');
+        if(display) {
+          display.textContent = this.bpm;
+          if(this.bpm > 120) {
+            display.style.color = '#fff';
+            display.style.textShadow = '0 0 20px rgba(255,0,0,0.8)';
+          } else {
+            display.style.color = 'var(--red)';
+            display.style.textShadow = '0 0 15px rgba(255,0,60,0.5)';
+          }
+        }
+      }, 1000);
+    },
+    simulateStress() {
+      this.stressMode = true;
+      this.bpm = 125;
+      App.speak("Warning. Severe adrenaline spike detected. Abnormal heart rate.");
+      alert('⚠️ BIOMETRIC ALERT: Severe Adrenaline Spike Detected (BPM > 120). Activating Pre-SOS Monitoring...');
+      setTimeout(() => {
+        const proceed = confirm('Your heart rate is abnormally high. Do you want to trigger SOS now?');
+        if(proceed) {
+          App.nav.switchScreen('sos');
+          App.sos.activate();
+        }
+        this.stressMode = false;
+        this.bpm = 85;
+      }, 3000);
+    }
+  },
+
+  // ── TERMINAL LOG ──
+  terminal: {
+    _interval: null,
+    lines: [
+      "Syncing Guardian Node...",
+      "Encrypting GPS packet... [OK]",
+      "Scanning local Bluetooth devices...",
+      "Threat index: 25% (NOMINAL)",
+      "Connecting to mesh network...",
+      "Audio buffer cleared.",
+      "Camera hardware initialized.",
+      "Evidence Vault checksum verified.",
+      "Running predictive safety analysis..."
+    ],
+    init() {
+      const feed = document.getElementById('terminal-feed');
+      if(!feed) return;
+      this._interval = setInterval(() => {
+        const msg = this.lines[Math.floor(Math.random() * this.lines.length)];
+        const time = new Date().toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        const el = document.createElement('div');
+        el.innerHTML = `<span style="color:var(--dim);">[${time}]</span> ${msg}`;
+        feed.appendChild(el);
+        if(feed.children.length > 20) feed.removeChild(feed.firstChild);
+        feed.scrollTop = feed.scrollHeight;
+      }, 3500);
+    }
+  },
+
+  // ── ACTIVE RADAR ──
+  radar: {
+    init() {
+      const blipsContainer = document.getElementById('radar-blips');
+      if(!blipsContainer) return;
+      setInterval(() => {
+        // 30% chance to spawn a blip every second
+        if(Math.random() > 0.3) return;
+        const blip = document.createElement('div');
+        const isSafe = Math.random() > 0.4; // 60% chance of green blip, 40% red
+        const color = isSafe ? '#00FF88' : '#FF003C';
+        
+        // Random position within the radar circle (radius 60px)
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 45 + 5; // keep it slightly away from center and edge
+        const top = 60 + Math.sin(angle) * radius;
+        const left = 60 + Math.cos(angle) * radius;
+        
+        blip.style.cssText = `position:absolute; top:${top}px; left:${left}px; width:6px; height:6px; background:${color}; border-radius:50%; box-shadow:0 0 10px ${color}; animation:blipFade 2s forwards;`;
+        blipsContainer.appendChild(blip);
+        
+        // Remove after animation
+        setTimeout(() => {
+          if(blip.parentNode) blip.parentNode.removeChild(blip);
+        }, 2000);
+      }, 1000);
+    }
+  },
+
+  // ── HIDDEN CAMERA DETECTOR ──
+  detector: {
+    stream: null, _interval: null,
+    async start() {
+      const video = document.getElementById('detector-video');
+      const status = document.getElementById('detector-status');
+      const btn = document.getElementById('btn-start-detector');
+      if(!video) return;
+
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = this.stream;
+        status.textContent = '[SYSTEM] SCANNING FOR IR EMISSIONS...';
+        status.style.color = 'var(--cyan)';
+        status.style.borderColor = 'var(--cyan)';
+        btn.textContent = 'SCANNING...';
+        btn.style.pointerEvents = 'none';
+
+        // Simulate finding something after 5-10 seconds
+        this._interval = setTimeout(() => {
+          this.simulateDetection();
+        }, 5000 + Math.random() * 5000);
+
+      } catch(e) {
+        alert('Camera access denied or unavailable. Cannot run Spy Detector.');
+      }
+    },
+    simulateDetection() {
+      const blips = document.getElementById('detector-blips');
+      const status = document.getElementById('detector-status');
+      if(!blips) return;
+
+      // Draw a target box
+      const box = document.createElement('div');
+      const top = 20 + Math.random() * 50;
+      const left = 20 + Math.random() * 50;
+      box.style.cssText = `position:absolute; top:${top}%; left:${left}%; width:40px; height:40px; border:2px solid var(--red); box-shadow:0 0 10px var(--red); animation:pulse 0.5s infinite;`;
+      
+      const label = document.createElement('div');
+      label.textContent = 'IR SOURCE';
+      label.style.cssText = `position:absolute; top:-15px; left:0; color:var(--red); font-size:0.6rem; font-weight:bold; white-space:nowrap;`;
+      box.appendChild(label);
+      blips.appendChild(box);
+
+      status.textContent = '⚠️ [ALERT] POTENTIAL HIDDEN CAMERA / IR EMITTER DETECTED ⚠️';
+      status.style.color = '#fff';
+      status.style.backgroundColor = 'var(--red)';
+      App.speak("Warning. Potential hidden camera or infrared emitter detected in the vicinity.");
+      
+      if(navigator.vibrate) navigator.vibrate([200,100,200,100,200]);
+    },
+    stop() {
+      if(this.stream) {
+        this.stream.getTracks().forEach(t => t.stop());
+        this.stream = null;
+      }
+      if(this._interval) clearTimeout(this._interval);
+      const video = document.getElementById('detector-video');
+      if(video) video.srcObject = null;
+      
+      const blips = document.getElementById('detector-blips');
+      if(blips) blips.innerHTML = '';
+      
+      const status = document.getElementById('detector-status');
+      if(status) {
+        status.textContent = '[SYSTEM] OFFLINE';
+        status.style.color = 'var(--dim)';
+        status.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        status.style.borderColor = 'var(--dim)';
+      }
+      
+      const btn = document.getElementById('btn-start-detector');
+      if(btn) {
+        btn.textContent = 'START SCAN';
+        btn.style.pointerEvents = 'auto';
+      }
+    }
+  },
+
+  // ── OFFLINE MESH NETWORK ──
+  mesh: {
+    init() {
+      const container = document.getElementById('mesh-nodes-container');
+      const counter = document.getElementById('mesh-node-count');
+      if(!container || !counter) return;
+
+      let nodeCount = 0;
+      setInterval(() => {
+        // Chance to spawn a new node
+        if(Math.random() > 0.4 && nodeCount < 5) {
+          nodeCount++;
+          counter.textContent = nodeCount;
+          
+          const node = document.createElement('div');
+          // Random position
+          const top = 20 + Math.random() * 60;
+          const left = 10 + Math.random() * 80;
+          node.style.cssText = `position:absolute; top:${top}%; left:${left}%; width:6px; height:6px; background:#fff; border-radius:50%; box-shadow:0 0 8px #fff; opacity:0; animation:meshLineFade 8s forwards;`;
+          
+          // Line connecting to center (50%, 50%)
+          const dx = 50 - left;
+          const dy = 50 - top;
+          const length = Math.sqrt(dx*dx + dy*dy);
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          
+          const line = document.createElement('div');
+          line.style.cssText = `position:absolute; top:${top}%; left:${left}%; width:${length}%; height:1px; background:var(--cyan); transform-origin:0 0; transform:rotate(${angle}deg); opacity:0; animation:meshLineFade 8s forwards; box-shadow:0 0 5px var(--cyan);`;
+          
+          container.appendChild(line);
+          container.appendChild(node);
+          
+          setTimeout(() => {
+            if(node.parentNode) node.parentNode.removeChild(node);
+            if(line.parentNode) line.parentNode.removeChild(line);
+            nodeCount--;
+            counter.textContent = nodeCount;
+          }, 7800);
+        }
+      }, 2000);
+    }
+  },
+
+  // ── GYROSCOPE (Shake-to-SOS) ──
+  gyroscope: {
+    shakeThreshold: 15, // m/s^2
+    lastUpdate: 0,
+    lastX: null, lastY: null, lastZ: null,
+    shakeCount: 0,
+    init() {
+      if(!window.DeviceMotionEvent) {
+        console.warn('[GYRO] DeviceMotion not supported on this device/browser');
+        return;
+      }
+      // Note: On iOS 13+, DeviceMotionEvent requires explicit user permission.
+      // For this hackathon demo, we will bind it directly and assume non-iOS or permission granted.
+      window.addEventListener('devicemotion', (e) => this.handleMotion(e), false);
+    },
+    handleMotion(e) {
+      // Check if Gesture SOS is enabled in Settings
+      const gestureToggle = document.getElementById('setting-gesture');
+      if(!gestureToggle || !gestureToggle.checked) return;
+      if(App.sos.activated) return; // Don't trigger if already active
+
+      const acc = e.accelerationIncludingGravity;
+      if(!acc) return;
+
+      const curTime = Date.now();
+      if((curTime - this.lastUpdate) > 100) {
+        const diffTime = curTime - this.lastUpdate;
+        this.lastUpdate = curTime;
+
+        if(this.lastX !== null) {
+          const speed = Math.abs(acc.x + acc.y + acc.z - this.lastX - this.lastY - this.lastZ) / diffTime * 10000;
+          if(speed > this.shakeThreshold) {
+            this.shakeCount++;
+            if(this.shakeCount >= 4) { // 4 shakes detected
+              console.log('[GYRO] Violent shaking detected! Triggering SOS.');
+              App.speak("Violent motion detected. Automatically triggering SOS protocol.");
+              App.nav.switchScreen('sos');
+              App.sos.activate();
+              this.shakeCount = 0;
+            }
+          } else {
+            // Reset if not consecutive
+            if(this.shakeCount > 0 && curTime - this.lastUpdate > 1000) {
+               this.shakeCount = 0;
+            }
+          }
+        }
+        this.lastX = acc.x;
+        this.lastY = acc.y;
+        this.lastZ = acc.z;
+      }
     }
   }
 };
