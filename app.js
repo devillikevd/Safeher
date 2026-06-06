@@ -1002,49 +1002,70 @@ const App = {
         return;
       }
 
-      // Step 1: Try simplest possible video+audio (most compatible)
+      // Step 1: Get camera stream — try generic first, then explicitly user-facing (laptop webcam)
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        // Validate that we actually got a working video track
+        const vTracks = stream.getVideoTracks();
+        if (vTracks.length === 0 || vTracks[0].readyState === 'ended') {
+          throw new Error('No active video track');
+        }
         hasVideo = true;
-        this._logEvidence('📹 Camera + Microphone access granted');
+        this._logEvidence('📹 Camera + Microphone access granted [' + (vTracks[0].label || 'webcam') + ']');
       } catch(e) {
-        console.warn('[SOS] Camera access failed:', e.name, '— trying audio only');
-        this._logEvidence('⚠️ Camera unavailable — recording audio only');
+        console.warn('[SOS] Generic camera failed:', e.name, e.message);
+        // Explicitly request laptop front camera
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          this._logEvidence('🎙️ Microphone granted (audio-only mode)');
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: { facingMode: 'user' }
+          });
+          const vTracks = stream.getVideoTracks();
+          if (vTracks.length > 0 && vTracks[0].readyState !== 'ended') {
+            hasVideo = true;
+            this._logEvidence('📹 Laptop webcam access granted [' + (vTracks[0].label || 'front cam') + ']');
+          } else {
+            throw new Error('Laptop webcam track inactive');
+          }
         } catch(e2) {
-          console.error('[SOS] All media failed:', e2);
-          this._logEvidence('🚫 All media permissions denied — using mock evidence');
-          this.saveMockEvidence('audio');
-          this.saveMockEvidence('photo');
-          return;
+          console.warn('[SOS] Laptop webcam also failed:', e2.message, '— audio only');
+          this._logEvidence('⚠️ Camera unavailable — recording audio only');
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this._logEvidence('🎙️ Microphone granted (audio-only mode)');
+          } catch(e3) {
+            console.error('[SOS] All media failed:', e3);
+            this._logEvidence('🚫 All media permissions denied — using mock evidence');
+            this.saveMockEvidence('audio');
+            this.saveMockEvidence('photo');
+            return;
+          }
         }
       }
 
       this.cameraStream = stream;
       this.audioStream = stream;
 
-      // Step 2: Setup preview ONLY if we have video track
+      // Step 2: Setup preview ONLY if we have a confirmed working video track
       if(hasVideo) {
         const preview = document.getElementById('sos-camera-preview');
         if(preview) {
-          // FIX: Set handlers BEFORE setting srcObject to avoid race condition
+          // Set handlers BEFORE srcObject to avoid race condition
           await new Promise((resolve) => {
             preview.onloadedmetadata = async () => {
               try { await preview.play(); } catch(err) {}
-              // Give camera sensor time to warm up — prevents black frames!
+              // Give camera sensor 1s to warm up — prevents black frames!
               setTimeout(resolve, 1000);
             };
             // Safety timeout
-            setTimeout(resolve, 3000);
-            // Now set stream (triggers onloadedmetadata)
+            setTimeout(resolve, 3500);
+            // Setting srcObject triggers onloadedmetadata
             preview.muted = true;
             preview.playsInline = true;
             preview.srcObject = stream;
           });
         }
-        this._logEvidence('📡 Live camera feed active');
+        this._logEvidence('📡 Live camera feed active — recording...');
       } else {
         const badge = document.getElementById('camera-overlay-badge');
         if(badge) badge.textContent = '🎙️ AUDIO ONLY';
