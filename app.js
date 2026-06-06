@@ -1038,14 +1038,14 @@ const App = {
       // Start MediaRecorder
       this.recordedChunks = [];
       
-      // Determine best MIME type (prefer MP4 for iOS Safari compatibility)
+      // Determine best MIME type (prefer webm, fallback to mp4 for iOS)
       let mimeType = '';
       if(hasVideo) {
         if(MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
-        if(MediaRecorder.isTypeSupported('video/mp4')) mimeType = 'video/mp4';
+        else if(MediaRecorder.isTypeSupported('video/mp4')) mimeType = 'video/mp4';
       } else {
         if(MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-        if(MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        else if(MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
       }
       
       const options = mimeType ? { mimeType } : {};
