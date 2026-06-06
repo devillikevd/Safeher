@@ -994,7 +994,7 @@ const App = {
       // Try video+audio first, fallback to audio-only, then mock
       let stream = null;
       let hasVideo = false;
-      
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         this._logEvidence('🚫 MediaDevices API not supported (requires HTTPS/localhost)');
         this.saveMockEvidence('audio');
@@ -1002,62 +1002,46 @@ const App = {
         return;
       }
 
+      // Step 1: Try simplest possible video+audio (most compatible)
       try {
-        // Explicit video constraints to force actual frames (not black)
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true },
-          video: {
-            facingMode: { ideal: 'environment' }, // prefer rear camera on phone
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         hasVideo = true;
         this._logEvidence('📹 Camera + Microphone access granted');
       } catch(e) {
-        console.warn('[SOS] Video+Audio (rear) failed:', e.name, e.message);
-        // Try user-facing camera (laptop webcam)
+        console.warn('[SOS] Camera access failed:', e.name, '— trying audio only');
+        this._logEvidence('⚠️ Camera unavailable — recording audio only');
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true },
-            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-          });
-          hasVideo = true;
-          this._logEvidence('📹 Front camera + Microphone access granted');
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this._logEvidence('🎙️ Microphone granted (audio-only mode)');
         } catch(e2) {
-          console.warn('[SOS] Front camera also failed:', e2.name, '— audio only');
-          this._logEvidence('⚠️ Camera unavailable — trying audio only');
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this._logEvidence('🎙️ Microphone access granted (audio-only mode)');
-          } catch(e3) {
-            console.error('[SOS] Audio also failed:', e3);
-            this._logEvidence('🚫 All media permissions denied — using mock evidence');
-            this.saveMockEvidence('audio');
-            this.saveMockEvidence('photo');
-            return;
-          }
+          console.error('[SOS] All media failed:', e2);
+          this._logEvidence('🚫 All media permissions denied — using mock evidence');
+          this.saveMockEvidence('audio');
+          this.saveMockEvidence('photo');
+          return;
         }
       }
+
       this.cameraStream = stream;
       this.audioStream = stream;
 
-      // CRITICAL: Wait for camera to produce actual frames before starting recorder
+      // Step 2: Setup preview ONLY if we have video track
       if(hasVideo) {
         const preview = document.getElementById('sos-camera-preview');
         if(preview) {
-          preview.srcObject = stream;
-          preview.muted = true;
-          preview.playsInline = true;
-          // Wait for metadata AND first frame to prevent black video
+          // FIX: Set handlers BEFORE setting srcObject to avoid race condition
           await new Promise((resolve) => {
             preview.onloadedmetadata = async () => {
-              try { await preview.play(); } catch(e) {}
-              // Give camera sensor 800ms to warm up (prevents black frames)
-              setTimeout(resolve, 800);
+              try { await preview.play(); } catch(err) {}
+              // Give camera sensor time to warm up — prevents black frames!
+              setTimeout(resolve, 1000);
             };
-            // Timeout fallback in case event doesn't fire
-            setTimeout(resolve, 2500);
+            // Safety timeout
+            setTimeout(resolve, 3000);
+            // Now set stream (triggers onloadedmetadata)
+            preview.muted = true;
+            preview.playsInline = true;
+            preview.srcObject = stream;
           });
         }
         this._logEvidence('📡 Live camera feed active');
