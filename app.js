@@ -1003,32 +1003,62 @@ const App = {
       }
 
       try {
-        // Use simplest constraints to maximize compatibility
-        stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+        // Explicit video constraints to force actual frames (not black)
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+          video: {
+            facingMode: { ideal: 'environment' }, // prefer rear camera on phone
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
         hasVideo = true;
         this._logEvidence('📹 Camera + Microphone access granted');
       } catch(e) {
-        console.warn('[SOS] Video+Audio failed:', e);
-        this._logEvidence('⚠️ Camera denied or unavailable — trying audio only');
+        console.warn('[SOS] Video+Audio (rear) failed:', e.name, e.message);
+        // Try user-facing camera (laptop webcam)
         try {
-          stream = await navigator.mediaDevices.getUserMedia({audio: true});
-          this._logEvidence('🎙️ Microphone access granted (audio-only mode)');
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+          });
+          hasVideo = true;
+          this._logEvidence('📹 Front camera + Microphone access granted');
         } catch(e2) {
-          console.error('[SOS] Audio also failed:', e2);
-          this._logEvidence('🚫 All media permissions denied — using mock evidence');
-          this.saveMockEvidence('audio');
-          this.saveMockEvidence('photo');
-          return;
+          console.warn('[SOS] Front camera also failed:', e2.name, '— audio only');
+          this._logEvidence('⚠️ Camera unavailable — trying audio only');
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this._logEvidence('🎙️ Microphone access granted (audio-only mode)');
+          } catch(e3) {
+            console.error('[SOS] Audio also failed:', e3);
+            this._logEvidence('🚫 All media permissions denied — using mock evidence');
+            this.saveMockEvidence('audio');
+            this.saveMockEvidence('photo');
+            return;
+          }
         }
       }
       this.cameraStream = stream;
       this.audioStream = stream;
-      // Show live camera preview
+
+      // CRITICAL: Wait for camera to produce actual frames before starting recorder
       if(hasVideo) {
         const preview = document.getElementById('sos-camera-preview');
         if(preview) {
           preview.srcObject = stream;
-          preview.play().catch(()=>{});
+          preview.muted = true;
+          preview.playsInline = true;
+          // Wait for metadata AND first frame to prevent black video
+          await new Promise((resolve) => {
+            preview.onloadedmetadata = async () => {
+              try { await preview.play(); } catch(e) {}
+              // Give camera sensor 800ms to warm up (prevents black frames)
+              setTimeout(resolve, 800);
+            };
+            // Timeout fallback in case event doesn't fire
+            setTimeout(resolve, 2500);
+          });
         }
         this._logEvidence('📡 Live camera feed active');
       } else {
@@ -1060,7 +1090,6 @@ const App = {
       this.mediaRecorder.ondataavailable = (e) => {
         if(e.data && e.data.size > 0) {
           this.recordedChunks.push(e.data);
-          // Update size display
           const totalSize = this.recordedChunks.reduce((s,c)=>s+c.size,0);
           const el = document.getElementById('ev-rec-size');
           if(el) el.textContent = totalSize > 1048576 ? (totalSize/1048576).toFixed(1)+' MB' : (totalSize/1024).toFixed(0)+' KB';
@@ -1071,7 +1100,6 @@ const App = {
         this.saveRecording(hasVideo);
       };
       
-      // IMPORTANT: DO NOT use timeslice start(1000) as it is broken on iOS Safari and causes empty recordings!
       this.mediaRecorder.start(); 
       
       this._logEvidence('🔴 Recording started — ' + (hasVideo ? 'video + audio' : 'audio only'));
