@@ -4,7 +4,7 @@
   <img src="https://readme-typing-svg.demolab.com?font=Orbitron&weight=900&size=32&pause=1000&color=FF003C&center=true&vCenter=true&random=false&width=600&height=60&lines=%5B+SAFEHER+OS+v1.0+%5D;CYBER-EMERGENCY+OPERATING+SYSTEM;THREAT+MITIGATION+PLATFORM" alt="SafeHer OS Typing Animation" />
 
   <br/>
-  <img src="https://i.imgur.com/uR1RhyO.png" alt="SafeHer OS Logo" width="140" />
+  <img src="https://img.shields.io/badge/🛡️-SAFEHER-FF003C?style=for-the-badge&labelColor=1a1a2e&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTIwIj48cGF0aCBkPSJNNTAgNSBMOTAgMjUgTDkwIDYwIFE5MCA5NSA1MCAxMTUgUTEwIDk1IDEwIDYwIEwxMCAyNSBaIiBmaWxsPSJub25lIiBzdHJva2U9IiNGRjAwM0MiIHN0cm9rZS13aWR0aD0iNCIvPjx0ZXh0IHg9IjUwIiB5PSI3MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI0ZGMDAzQyIgZm9udC1zaXplPSIzMCIgZm9udC13ZWlnaHQ9ImJvbGQiPVM8L3RleHQ+PC9zdmc+" alt="SafeHer Shield" width="180" />
 
   <br/><br/>
   <strong>Next-Generation Cyber-Emergency Operating System for Women's Safety<br/>Real-Time Threat Detection • AI-Driven Response • Legally Admissible Evidence Capture</strong>
