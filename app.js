@@ -1038,9 +1038,17 @@ const App = {
       // Start MediaRecorder
       this.recordedChunks = [];
       
-      // Simplify MIME type to prevent codec compatibility errors on some devices
-      const mimeType = hasVideo ? 'video/webm' : 'audio/webm';
-      const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : {};
+      // Determine best MIME type (prefer MP4 for iOS Safari compatibility)
+      let mimeType = '';
+      if(hasVideo) {
+        if(MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
+        if(MediaRecorder.isTypeSupported('video/mp4')) mimeType = 'video/mp4';
+      } else {
+        if(MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+        if(MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+      }
+      
+      const options = mimeType ? { mimeType } : {};
       
       try {
         this.mediaRecorder = new MediaRecorder(stream, options);
@@ -1058,10 +1066,13 @@ const App = {
           if(el) el.textContent = totalSize > 1048576 ? (totalSize/1048576).toFixed(1)+' MB' : (totalSize/1024).toFixed(0)+' KB';
         }
       };
-      this.mediaRecorder.onstop = () => this.saveRecording(hasVideo);
       
-      // Use a timeslice of 1000ms to ensure chunks are pushed reliably
-      this.mediaRecorder.start(1000); 
+      this.mediaRecorder.onstop = () => {
+        this.saveRecording(hasVideo);
+      };
+      
+      // IMPORTANT: DO NOT use timeslice start(1000) as it is broken on iOS Safari and causes empty recordings!
+      this.mediaRecorder.start(); 
       
       this._logEvidence('🔴 Recording started — ' + (hasVideo ? 'video + audio' : 'audio only'));
       console.log('[SOS] 🎙️ Recording started');
